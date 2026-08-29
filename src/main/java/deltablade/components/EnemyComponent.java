@@ -63,10 +63,10 @@ public class EnemyComponent extends Component {
         this.type = type;
         this.health = type.health;
         double levelMultiplier = 1 + (level - 1) * 0.12;
-        this.entrySpeed = 180 + level * 15;
+        this.entrySpeed = 90 + level * 8;
         this.speedX = type.speed * levelMultiplier * (random.nextBoolean() ? 1 : -1);
         this.hoverPhase = random.nextDouble() * Math.PI * 2;
-        this.diveSpeed = 150 + level * 20;
+        this.diveSpeed = 120 + level * 15;
     }
     
     public void setEntryData(double targetX, double targetY, WaveManager.EntryPath path, int squadId) {
@@ -86,8 +86,12 @@ public class EnemyComponent extends Component {
         }
     }
     
+    private static final double MAX_TPF = 1.0 / 30.0;
+    
     @Override
     public void onUpdate(double tpf) {
+        tpf = Math.min(tpf, MAX_TPF);
+        
         switch (state) {
             case ENTERING -> updateEntering(tpf);
             case FORMATION -> updateFormation(tpf);

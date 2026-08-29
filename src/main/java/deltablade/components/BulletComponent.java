@@ -14,8 +14,11 @@ public class BulletComponent extends Component {
         this.isPlayerBullet = isPlayerBullet;
     }
     
+    private static final double MAX_TPF = 1.0 / 30.0;
+    
     @Override
     public void onUpdate(double tpf) {
+        tpf = Math.min(tpf, MAX_TPF);
         entity.translateY(speed * tpf);
         
         if (entity.getY() < -20 || entity.getY() > FXGL.getAppHeight() + 20) {

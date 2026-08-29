@@ -91,12 +91,22 @@ public class DeltaBladeFactory implements EntityFactory {
         Circle eye = new Circle(width / 2, 8, 5);
         eye.setFill(Color.YELLOW);
         
+        EnemyComponent enemyComponent = new EnemyComponent(type, level);
+        
+        if (data.hasKey("entering") && data.<Boolean>get("entering")) {
+            double targetX = data.get("targetX");
+            double targetY = data.get("targetY");
+            WaveManager.EntryPath entryPath = data.get("entryPath");
+            int squadId = data.get("squadId");
+            enemyComponent.setEntryData(targetX, targetY, entryPath, squadId);
+        }
+        
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY)
                 .viewWithBBox(body)
                 .view(eye)
                 .collidable()
-                .with(new EnemyComponent(type, level))
+                .with(enemyComponent)
                 .build();
     }
     

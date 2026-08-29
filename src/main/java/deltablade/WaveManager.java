@@ -70,24 +70,33 @@ public class WaveManager {
         this.enemiesSpawned = 0;
         this.squadSpawnTimer = 0;
         
-        int rows = 2 + level / 3;
-        int cols = Math.min(5 + level, 8);
+        // Wave 1: 6 enemies, +2 per wave, max 18 (3 rows × 6 cols)
+        int targetEnemies = Math.min(6 + (level - 1) * 2, 18);
+        
+        // Calculate formation dimensions to fit target enemies
+        int cols = Math.min(6, targetEnemies);
+        int rows = (int) Math.ceil((double) targetEnemies / cols);
+        rows = Math.min(rows, 3);
         
         double spacingX = getAppWidth() / (cols + 1.0);
         double spacingY = 45;
         double startY = 60;
         
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
+        int slotsCreated = 0;
+        for (int row = 0; row < rows && slotsCreated < targetEnemies; row++) {
+            for (int col = 0; col < cols && slotsCreated < targetEnemies; col++) {
                 double x = spacingX * (col + 1) - 15;
                 double y = startY + row * spacingY;
                 formationSlots.add(new Point2D(x, y));
+                slotsCreated++;
             }
         }
         
         totalEnemiesInWave = formationSlots.size();
-        squadsToSpawn = 3 + level / 2;
-        int enemiesPerSquad = (int) Math.ceil((double) totalEnemiesInWave / squadsToSpawn);
+        
+        // Squads: wave 1-2 = 2 squads, then +1 per 2 levels, max based on enemies
+        squadsToSpawn = Math.min(2 + (level - 1) / 2, (totalEnemiesInWave + 2) / 3);
+        squadsToSpawn = Math.max(squadsToSpawn, 1);
         
         set(GameVars.ENEMIES_REMAINING, totalEnemiesInWave);
         
@@ -111,8 +120,11 @@ public class WaveManager {
         
         squadsToSpawn--;
         
-        int squadSize = Math.min(4 + currentLevel / 2, totalEnemiesInWave - enemiesSpawned);
-        squadSize = Math.min(squadSize, 6);
+        int remaining = totalEnemiesInWave - enemiesSpawned;
+        // Squad size: 3-5 enemies, distribute evenly across remaining squads
+        int baseSize = Math.max(3, remaining / Math.max(squadsToSpawn + 1, 1));
+        int squadSize = Math.min(baseSize, 5);
+        squadSize = Math.min(squadSize, remaining);
         
         if (squadSize <= 0) return;
         

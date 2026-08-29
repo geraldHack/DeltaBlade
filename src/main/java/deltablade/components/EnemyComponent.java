@@ -9,9 +9,9 @@ import java.util.Random;
 public class EnemyComponent extends Component {
     
     public enum EnemyType {
-        BASIC(1, 100, 80, 0.02),
-        FAST(1, 150, 120, 0.03),
-        TOUGH(3, 300, 60, 0.04);
+        BASIC(1, 100, 55, 0.015),
+        FAST(1, 150, 80, 0.02),
+        TOUGH(3, 300, 45, 0.025);
         
         public final int health;
         public final int scoreValue;
@@ -62,11 +62,12 @@ public class EnemyComponent extends Component {
     public EnemyComponent(EnemyType type, int level) {
         this.type = type;
         this.health = type.health;
-        double levelMultiplier = 1 + (level - 1) * 0.12;
-        this.entrySpeed = 90 + level * 8;
+        double levelMultiplier = 1 + (level - 1) * 0.08;
+        this.entrySpeed = 60 + level * 5;
         this.speedX = type.speed * levelMultiplier * (random.nextBoolean() ? 1 : -1);
         this.hoverPhase = random.nextDouble() * Math.PI * 2;
-        this.diveSpeed = 120 + level * 15;
+        this.diveSpeed = 90 + level * 10;
+        this.minFormationTime = 3.0 + random.nextDouble() * 2.0;
     }
     
     public void setEntryData(double targetX, double targetY, WaveManager.EntryPath path, int squadId) {
@@ -86,11 +87,18 @@ public class EnemyComponent extends Component {
         }
     }
     
-    private static final double MAX_TPF = 1.0 / 30.0;
+    private static final double MAX_TPF = 1.0 / 45.0;
+    private int frameCount = 0;
+    private static final int WARMUP_FRAMES = 3;
     
     @Override
     public void onUpdate(double tpf) {
-        tpf = Math.min(tpf, MAX_TPF);
+        frameCount++;
+        if (frameCount <= WARMUP_FRAMES) {
+            tpf = Math.min(tpf, 0.008);
+        } else {
+            tpf = Math.min(tpf, MAX_TPF);
+        }
         
         switch (state) {
             case ENTERING -> updateEntering(tpf);

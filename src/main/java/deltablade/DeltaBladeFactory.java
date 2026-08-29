@@ -8,15 +8,23 @@ import com.almasb.fxgl.entity.Spawns;
 import com.almasb.fxgl.texture.Texture;
 import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
+import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
+import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.effect.Glow;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.RadialGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 
 import static com.almasb.fxgl.dsl.FXGL.texture;
 
@@ -149,14 +157,77 @@ public class DeltaBladeFactory implements EntityFactory {
                 .build();
     }
 
-    @Spawns("lifePickup")
-    public Entity newLifePickup(SpawnData data) {
+    @Spawns("extraLetterOrb")
+    public Entity newExtraLetterOrb(SpawnData data) {
+        char letter = data.get("letter");
+        int letterIndex = data.get("letterIndex");
+        
+        Color[] letterColors = {
+            Color.rgb(255, 100, 100),
+            Color.rgb(100, 255, 100),
+            Color.rgb(100, 200, 255),
+            Color.rgb(255, 200, 100),
+            Color.rgb(200, 100, 255)
+        };
+        
+        Color orbColor = letterColors[letterIndex % letterColors.length];
+        Color innerColor = orbColor.brighter().brighter();
+        
+        RadialGradient gradient = new RadialGradient(
+            0, 0, 0.25, 0.25, 0.9, true, CycleMethod.NO_CYCLE,
+            new Stop(0, innerColor),
+            new Stop(0.4, orbColor.brighter()),
+            new Stop(0.7, orbColor),
+            new Stop(1, orbColor.darker().darker())
+        );
+        
+        Circle orb = new Circle(16);
+        orb.setFill(gradient);
+        orb.setStroke(Color.WHITE);
+        orb.setStrokeWidth(2);
+        
+        Glow glow = new Glow(0.7);
+        DropShadow shadow = new DropShadow(12, orbColor);
+        glow.setInput(shadow);
+        orb.setEffect(glow);
+        
+        Text letterText = new Text(String.valueOf(letter));
+        letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
+        letterText.setFill(Color.WHITE);
+        letterText.setStroke(Color.rgb(0, 0, 0, 0.5));
+        letterText.setStrokeWidth(1);
+        letterText.setTranslateX(-6);
+        letterText.setTranslateY(6);
+        
+        DropShadow letterShadow = new DropShadow(3, Color.BLACK);
+        Glow letterGlow = new Glow(0.4);
+        letterGlow.setInput(letterShadow);
+        letterText.setEffect(letterGlow);
+        
+        Rectangle shineStripe = new Rectangle(4, 36);
+        LinearGradient shineGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+            new Stop(0, Color.TRANSPARENT),
+            new Stop(0.3, Color.rgb(255, 255, 255, 0.4)),
+            new Stop(0.5, Color.rgb(255, 255, 255, 0.8)),
+            new Stop(0.7, Color.rgb(255, 255, 255, 0.4)),
+            new Stop(1, Color.TRANSPARENT)
+        );
+        shineStripe.setFill(shineGradient);
+        shineStripe.setTranslateX(-18);
+        shineStripe.setTranslateY(-18);
+        
+        Circle clipCircle = new Circle(15);
+        Group shineGroup = new Group(shineStripe);
+        shineGroup.setClip(clipCircle);
+        
+        Group group = new Group(orb, shineGroup, letterText);
+        
         return FXGL.entityBuilder(data)
-                .type(EntityType.PICKUP)
-                .viewWithBBox(safeTexture("heart.png", PICKUP_SIZE, PICKUP_SIZE, Color.CRIMSON))
-                .zIndex(60)
+                .type(EntityType.EXTRA_LETTER_PICKUP)
+                .viewWithBBox(group)
+                .zIndex(65)
                 .collidable()
-                .with(new PickupComponent(PickupComponent.PickupType.EXTRA_LIFE))
+                .with(new ExtraLetterPickupComponent(letter, letterIndex))
                 .build();
     }
 
@@ -166,28 +237,39 @@ public class DeltaBladeFactory implements EntityFactory {
         int height = data.get("height");
         boolean isLeft = data.get("isLeft");
 
-        LinearGradient gradient;
+        LinearGradient metalGradient;
         if (isLeft) {
-            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.rgb(20, 40, 60)),
-                    new Stop(0.5, Color.rgb(60, 180, 220)),
-                    new Stop(0.7, Color.rgb(40, 120, 160)),
-                    new Stop(1, Color.rgb(10, 20, 30)));
+            metalGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(40, 45, 55)),
+                    new Stop(0.2, Color.rgb(70, 80, 95)),
+                    new Stop(0.5, Color.rgb(90, 100, 115)),
+                    new Stop(0.7, Color.rgb(60, 70, 85)),
+                    new Stop(1, Color.rgb(30, 35, 45)));
         } else {
-            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.rgb(10, 20, 30)),
-                    new Stop(0.3, Color.rgb(40, 120, 160)),
-                    new Stop(0.5, Color.rgb(60, 180, 220)),
-                    new Stop(1, Color.rgb(20, 40, 60)));
+            metalGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(30, 35, 45)),
+                    new Stop(0.3, Color.rgb(60, 70, 85)),
+                    new Stop(0.5, Color.rgb(90, 100, 115)),
+                    new Stop(0.8, Color.rgb(70, 80, 95)),
+                    new Stop(1, Color.rgb(40, 45, 55)));
         }
 
         Rectangle rail = new Rectangle(width, height);
-        rail.setFill(gradient);
-        rail.setStroke(Color.CYAN);
-        rail.setStrokeWidth(1);
+        rail.setFill(metalGradient);
+        
+        Rectangle innerBorder = new Rectangle(2, height - 4);
+        innerBorder.setFill(Color.rgb(50, 55, 65));
+        innerBorder.setX(isLeft ? width - 4 : 2);
+        innerBorder.setY(2);
+        
+        Rectangle highlight = new Rectangle(1, height);
+        highlight.setFill(Color.rgb(120, 130, 150, 0.5));
+        highlight.setX(isLeft ? 3 : width - 4);
+
+        Group railGroup = new Group(rail, innerBorder, highlight);
 
         return FXGL.entityBuilder(data)
-                .view(rail)
+                .view(railGroup)
                 .zIndex(200)
                 .build();
     }

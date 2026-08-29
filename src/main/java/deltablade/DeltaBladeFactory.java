@@ -5,7 +5,6 @@ import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.EntityFactory;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.Spawns;
-import com.almasb.fxgl.texture.Texture;
 import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.ExtraLetterPickupComponent;
@@ -13,8 +12,11 @@ import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.effect.ColorAdjust;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
@@ -26,9 +28,13 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 
-import static com.almasb.fxgl.dsl.FXGL.texture;
+import java.io.InputStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class DeltaBladeFactory implements EntityFactory {
+
+    private static final Logger LOG = Logger.getLogger(DeltaBladeFactory.class.getName());
 
     private static final int SHIP_SIZE = 48;
     private static final int BULLET_W = 12;
@@ -36,28 +42,68 @@ public class DeltaBladeFactory implements EntityFactory {
     private static final int PICKUP_SIZE = 28;
 
     /**
-     * Load a texture and resize it using setFitWidth/Height for better compatibility.
-     * Falls back to a colored rectangle only if the texture truly cannot be loaded.
+     * Load a PNG directly from classpath, bypassing FXGL's asset loader entirely.
+     * This avoids Mac-specific issues with FXGL.texture() that cause missing-texture placeholders.
+     * Returns crisp pixel-art scaled ImageView, or logs loudly and returns a visible error indicator.
      */
-    private static Node safeTexture(String name, int w, int h, Color fallback) {
+    private static Node loadSprite(String filename, int w, int h, Color errorColor) {
+        String path = "/assets/textures/" + filename;
         try {
-            Texture t = texture(name);
-            if (t == null || t.getImage() == null || t.getImage().isError()) {
-                return new Rectangle(w, h, fallback);
+            InputStream is = DeltaBladeFactory.class.getResourceAsStream(path);
+            if (is == null) {
+                LOG.log(Level.SEVERE, "SPRITE NOT FOUND: {0} - check classpath!", path);
+                return createErrorIndicator(w, h, errorColor, "NOT FOUND: " + filename);
             }
-            t.setFitWidth(w);
-            t.setFitHeight(h);
-            return t;
+            Image img = new Image(is);
+            is.close();
+            if (img.isError()) {
+                LOG.log(Level.SEVERE, "SPRITE LOAD ERROR: {0} - {1}", new Object[]{path, img.getException()});
+                return createErrorIndicator(w, h, errorColor, "ERROR: " + filename);
+            }
+            ImageView iv = new ImageView(img);
+            iv.setFitWidth(w);
+            iv.setFitHeight(h);
+            iv.setPreserveRatio(false);
+            iv.setSmooth(false);
+            return iv;
         } catch (Exception e) {
-            return new Rectangle(w, h, fallback);
+            LOG.log(Level.SEVERE, "SPRITE EXCEPTION: " + path, e);
+            return createErrorIndicator(w, h, errorColor, "EXC: " + filename);
         }
+    }
+
+    private static Node createErrorIndicator(int w, int h, Color color, String msg) {
+        Rectangle r = new Rectangle(w, h, color);
+        r.setStroke(Color.WHITE);
+        r.setStrokeWidth(2);
+        Text t = new Text("!");
+        t.setFill(Color.WHITE);
+        t.setFont(Font.font("Monospace", FontWeight.BOLD, Math.min(w, h) / 2));
+        t.setTranslateX(w / 2 - 5);
+        t.setTranslateY(h / 2 + 5);
+        Group g = new Group(r, t);
+        LOG.warning("Showing error indicator for: " + msg);
+        return g;
+    }
+
+    private static Node loadSpriteWithTint(String filename, int w, int h, Color tint, Color errorColor) {
+        Node sprite = loadSprite(filename, w, h, errorColor);
+        if (sprite instanceof ImageView iv && tint != null && !tint.equals(Color.WHITE)) {
+            double hue = (tint.getHue() - Color.WHITE.getHue()) / 360.0;
+            double sat = tint.getSaturation();
+            ColorAdjust colorAdjust = new ColorAdjust();
+            colorAdjust.setHue(hue);
+            colorAdjust.setSaturation(sat * 0.5);
+            iv.setEffect(colorAdjust);
+        }
+        return sprite;
     }
 
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER)
-                .viewWithBBox(safeTexture("player.png", SHIP_SIZE, SHIP_SIZE, Color.DODGERBLUE))
+                .viewWithBBox(loadSprite("player.png", SHIP_SIZE, SHIP_SIZE, Color.DODGERBLUE))
                 .zIndex(100)
                 .collidable()
                 .with(new PlayerComponent())
@@ -74,14 +120,20 @@ public class DeltaBladeFactory implements EntityFactory {
             case TOUGH -> "enemy_tough.png";
             default -> "enemy_basic.png";
         };
-        
+
         Color fallback = switch (type) {
             case FAST -> Color.LIME;
             case TOUGH -> Color.MEDIUMPURPLE;
             default -> Color.CRIMSON;
         };
 
-        Node view = safeTexture(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
+        Color tint = switch (type) {
+            case FAST -> Color.LIGHTGREEN;
+            case TOUGH -> Color.VIOLET;
+            default -> Color.WHITE;
+        };
+
+        Node view = loadSpriteWithTint(textureName, SHIP_SIZE, SHIP_SIZE, tint, fallback);
 
         EnemyComponent enemyComponent = new EnemyComponent(type, level);
 
@@ -109,7 +161,7 @@ public class DeltaBladeFactory implements EntityFactory {
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER_BULLET)
-                .viewWithBBox(safeTexture("bullet_player.png", BULLET_W, BULLET_H, Color.YELLOW))
+                .viewWithBBox(loadSprite("bullet_player.png", BULLET_W, BULLET_H, Color.YELLOW))
                 .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(speedX, speedY, true))
@@ -120,7 +172,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newEnemyBullet(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY_BULLET)
-                .viewWithBBox(safeTexture("bullet_enemy.png", 10, 16, Color.ORANGERED))
+                .viewWithBBox(loadSprite("bullet_enemy.png", 10, 16, Color.ORANGERED))
                 .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(250, false))
@@ -131,7 +183,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newWeaponPickup(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(safeTexture("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD))
+                .viewWithBBox(loadSprite("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD))
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.WEAPON_UPGRADE))
@@ -142,7 +194,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newAmmoPickup(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(safeTexture("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
+                .viewWithBBox(loadSprite("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
@@ -196,23 +248,7 @@ public class DeltaBladeFactory implements EntityFactory {
         letterGlow.setInput(letterShadow);
         letterText.setEffect(letterGlow);
         
-        Rectangle shineStripe = new Rectangle(4, 36);
-        LinearGradient shineGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-            new Stop(0, Color.TRANSPARENT),
-            new Stop(0.3, Color.rgb(255, 255, 255, 0.4)),
-            new Stop(0.5, Color.rgb(255, 255, 255, 0.8)),
-            new Stop(0.7, Color.rgb(255, 255, 255, 0.4)),
-            new Stop(1, Color.TRANSPARENT)
-        );
-        shineStripe.setFill(shineGradient);
-        shineStripe.setTranslateX(-18);
-        shineStripe.setTranslateY(-18);
-        
-        Circle clipCircle = new Circle(15);
-        Group shineGroup = new Group(shineStripe);
-        shineGroup.setClip(clipCircle);
-        
-        Group group = new Group(orb, shineGroup, letterText);
+        Group group = new Group(orb, letterText);
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.EXTRA_LETTER_PICKUP)

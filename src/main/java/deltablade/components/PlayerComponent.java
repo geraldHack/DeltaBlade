@@ -13,7 +13,7 @@ public class PlayerComponent extends Component {
     private static final double INVULNERABLE_DURATION = 2.0;
     
     private double fireCooldown = 0;
-    private static final double FIRE_RATE = 0.15;
+    private static final double FIRE_RATE = 0.10;
     
     @Override
     public void onUpdate(double tpf) {
@@ -37,16 +37,21 @@ public class PlayerComponent extends Component {
     
     public void moveLeft(double tpf) {
         double newX = entity.getX() - speed * tpf;
-        if (newX >= 0) {
+        double minX = GameVars.RAIL_WIDTH;
+        if (newX >= minX) {
             entity.setX(newX);
+        } else {
+            entity.setX(minX);
         }
     }
     
     public void moveRight(double tpf) {
         double newX = entity.getX() + speed * tpf;
-        double maxX = FXGL.getAppWidth() - entity.getWidth();
+        double maxX = FXGL.getAppWidth() - entity.getWidth() - GameVars.RAIL_WIDTH;
         if (newX <= maxX) {
             entity.setX(newX);
+        } else {
+            entity.setX(maxX);
         }
     }
     

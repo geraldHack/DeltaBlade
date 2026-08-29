@@ -12,7 +12,9 @@ public final class GameVars {
     public static final int INITIAL_LIVES = 3;
     public static final int INITIAL_AMMO_CAP = 5;
     public static final int MAX_AMMO_CAP = 12;
-    public static final int MAX_WEAPON_GRADE = 3;
+    public static final int MAX_WEAPON_GRADE = 4;
+    
+    public static final int RAIL_WIDTH = 32;
     
     private GameVars() {}
 }

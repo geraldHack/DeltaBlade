@@ -12,8 +12,6 @@ import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.scene.Group;
 import javafx.scene.Node;
-import javafx.scene.effect.DropShadow;
-import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
@@ -173,26 +171,12 @@ public class DeltaBladeFactory implements EntityFactory {
         
         Circle orb = new Circle(16);
         orb.setFill(gradient);
-        orb.setStroke(Color.WHITE);
-        orb.setStrokeWidth(2);
-        
-        Glow orbGlow = new Glow(0.7);
-        DropShadow orbShadow = new DropShadow(12, orbColor);
-        orbGlow.setInput(orbShadow);
-        orb.setEffect(orbGlow);
         
         Text letterText = new Text(String.valueOf(letter));
         letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
         letterText.setFill(Color.WHITE);
-        letterText.setStroke(Color.rgb(0, 0, 0, 0.5));
-        letterText.setStrokeWidth(1);
         letterText.setTranslateX(-6);
         letterText.setTranslateY(6);
-        
-        DropShadow letterShadow = new DropShadow(3, Color.BLACK);
-        Glow letterGlow = new Glow(0.4);
-        letterGlow.setInput(letterShadow);
-        letterText.setEffect(letterGlow);
         
         ExtraLetterPickupComponent component = new ExtraLetterPickupComponent(letter, letterIndex, letterText);
         Group flipWrapper = component.getFlipWrapper();

@@ -307,7 +307,6 @@ public class DeltaBladeApp extends GameApplication {
         text.setTranslateY(68);
         
         Group banner = new Group(bar, text);
-        banner.setViewOrder(-1000);
         
         activeBanners.add(banner);
         getGameScene().addUINode(banner);

@@ -179,7 +179,7 @@ public class DeltaBladeApp extends GameApplication {
         
         getGameScene().addUINode(waveText);
         
-        run(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
+        runOnce(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
     }
     
     private void fire() {
@@ -319,7 +319,7 @@ public class DeltaBladeApp extends GameApplication {
             
             getGameScene().addUINode(clearText);
             
-            run(() -> {
+            runOnce(() -> {
                 getGameScene().removeUINode(clearText);
                 inc(GameVars.LEVEL, 1);
                 startWave();

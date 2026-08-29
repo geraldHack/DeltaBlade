@@ -157,7 +157,7 @@ public class WaveManager {
             if (index == 0) {
                 spawnEnemy.run();
             } else {
-                run(spawnEnemy, javafx.util.Duration.seconds(index * 0.15));
+                runOnce(spawnEnemy, javafx.util.Duration.seconds(index * 0.15));
             }
             
             enemiesSpawned++;
@@ -207,7 +207,7 @@ public class WaveManager {
         
         getGameScene().addUINode(bonusText);
         
-        run(() -> getGameScene().removeUINode(bonusText), javafx.util.Duration.seconds(1.5));
+        runOnce(() -> getGameScene().removeUINode(bonusText), javafx.util.Duration.seconds(1.5));
     }
     
     public void onEnemyDestroyed(int squadId, boolean wasEntering) {

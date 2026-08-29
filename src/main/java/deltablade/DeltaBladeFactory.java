@@ -125,9 +125,12 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("weaponPickup")
     public Entity newWeaponPickup(SpawnData data) {
+        Node sprite = safeTexture("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD);
+        Group view = createLabeledPickup(sprite, "WPN", Color.GOLD);
+        
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(safeTexture("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD))
+                .viewWithBBox(view)
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.WEAPON_UPGRADE))
@@ -136,13 +139,33 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("ammoPickup")
     public Entity newAmmoPickup(SpawnData data) {
+        Node sprite = safeTexture("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN);
+        Group view = createLabeledPickup(sprite, "AMMO", Color.CYAN);
+        
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(safeTexture("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
+                .viewWithBBox(view)
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
                 .build();
+    }
+
+    /**
+     * Create a pickup view with a high-contrast text label above the sprite.
+     */
+    private static Group createLabeledPickup(Node sprite, String label, Color color) {
+        Text labelText = new Text(label);
+        labelText.setFont(Font.font("Monospace", FontWeight.BOLD, 10));
+        labelText.setFill(Color.WHITE);
+        labelText.setStroke(Color.BLACK);
+        labelText.setStrokeWidth(0.8);
+        
+        double textWidth = labelText.getLayoutBounds().getWidth();
+        labelText.setTranslateX((PICKUP_SIZE - textWidth) / 2);
+        labelText.setTranslateY(-3);
+        
+        return new Group(sprite, labelText);
     }
 
     @Spawns("extraLetterOrb")

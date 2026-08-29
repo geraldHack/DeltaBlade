@@ -772,6 +772,17 @@ public class DeltaBladeApp extends GameApplication {
         levelLabel.setTranslateY(35);
         levelLabel.textProperty().bind(getip(GameVars.LEVEL).asString("WAVE %d"));
         getGameScene().addUINode(levelLabel);
+        
+        Text livesLabel = new Text();
+        livesLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
+        livesLabel.setFill(Color.LIMEGREEN);
+        livesLabel.setTranslateX(xOffset);
+        livesLabel.setTranslateY(getAppHeight() - 20);
+        livesLabel.textProperty().bind(getip(GameVars.LIVES).asString("\u2665 %d"));
+        
+        DropShadow livesShadow = new DropShadow(3, Color.BLACK);
+        livesLabel.setEffect(livesShadow);
+        getGameScene().addUINode(livesLabel);
     }
     
     private Rectangle createBarBackground(int x, int y, int width, int height) {

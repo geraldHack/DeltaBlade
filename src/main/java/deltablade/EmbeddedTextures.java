@@ -1,9 +1,13 @@
 package deltablade;
 
 import javafx.scene.image.Image;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Polygon;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.util.Base64;
 import java.util.HashMap;
@@ -42,14 +46,14 @@ public final class EmbeddedTextures {
     private EmbeddedTextures() {}
 
     /**
-     * Preload all embedded textures into cache.
+     * Preload all embedded textures into cache at native size.
      * Call during title screen to detect problems early.
      * @return error message if any texture failed, null if all OK
      */
     public static String preloadAll() {
         StringBuilder errors = new StringBuilder();
         for (String name : TEXTURE_DATA.keySet()) {
-            Image img = getImage(name, 48, 48);
+            Image img = getImageNative(name);
             if (img == null || img.isError()) {
                 if (errors.length() > 0) errors.append(", ");
                 errors.append(name);
@@ -78,11 +82,12 @@ public final class EmbeddedTextures {
     }
 
     /**
-     * Get an Image from embedded data, with caching.
+     * Get an Image at native size from embedded data, with caching.
+     * Uses ImageIO (AWT) to decode, then copies pixels to WritableImage.
      * Returns null only if the texture name is not in embedded data.
      */
-    public static Image getImage(String name, int w, int h) {
-        String cacheKey = name + "_" + w + "x" + h;
+    public static Image getImageNative(String name) {
+        String cacheKey = name + "_native";
         if (IMAGE_CACHE.containsKey(cacheKey)) {
             return IMAGE_CACHE.get(cacheKey);
         }
@@ -92,17 +97,57 @@ public final class EmbeddedTextures {
             return null;
         }
 
+        byte[] bytes = Base64.getDecoder().decode(base64);
+
         try {
-            byte[] bytes = Base64.getDecoder().decode(base64);
-            Image img = new Image(new ByteArrayInputStream(bytes), w, h, false, false);
+            BufferedImage bi = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (bi != null) {
+                WritableImage wi = convertToWritableImage(bi);
+                IMAGE_CACHE.put(cacheKey, wi);
+                return wi;
+            }
+        } catch (Exception e) {
+            // ImageIO failed, try JavaFX fallback
+        }
+
+        try {
+            Image img = new Image(new ByteArrayInputStream(bytes));
             if (!img.isError()) {
                 IMAGE_CACHE.put(cacheKey, img);
                 return img;
             }
         } catch (Exception e) {
-            // Fall through
+            // Both methods failed
         }
         return null;
+    }
+
+    /**
+     * Get an Image from embedded data, with caching.
+     * The w/h parameters are only used for ImageView sizing, not for loading.
+     * Returns null only if the texture name is not in embedded data.
+     */
+    public static Image getImage(String name, int w, int h) {
+        return getImageNative(name);
+    }
+
+    /**
+     * Convert a BufferedImage to a WritableImage by copying ARGB pixels.
+     * Does NOT use SwingFXUtils (requires javafx.swing module).
+     */
+    private static WritableImage convertToWritableImage(BufferedImage bi) {
+        int width = bi.getWidth();
+        int height = bi.getHeight();
+        WritableImage wi = new WritableImage(width, height);
+        PixelWriter pw = wi.getPixelWriter();
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int argb = bi.getRGB(x, y);
+                pw.setArgb(x, y, argb);
+            }
+        }
+        return wi;
     }
 
     /**

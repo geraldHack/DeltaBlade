@@ -148,11 +148,21 @@ public class DeltaBladeApp extends GameApplication {
                 .put("height", getAppHeight()));
         
         spawnStars();
+        spawnSideRails();
         
         waveManager = new WaveManager();
         
         spawnPlayer();
         startWave();
+    }
+    
+    private void spawnSideRails() {
+        spawn("sideRail", new com.almasb.fxgl.entity.SpawnData(0, 0)
+                .put("height", getAppHeight())
+                .put("isLeft", true));
+        spawn("sideRail", new com.almasb.fxgl.entity.SpawnData(getAppWidth() - GameVars.RAIL_WIDTH, 0)
+                .put("height", getAppHeight())
+                .put("isLeft", false));
     }
     
     private void spawnStars() {
@@ -191,6 +201,9 @@ public class DeltaBladeApp extends GameApplication {
         runOnce(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
     }
     
+    private static final double BULLET_SPEED = -500;
+    private static final double SPREAD_VX = 80;
+    
     private void fire() {
         if (player == null || gameOver) return;
         
@@ -204,19 +217,27 @@ public class DeltaBladeApp extends GameApplication {
         double centerX = pc.getCenterX();
         double topY = pc.getTopY();
         
-        spawnBullet(centerX - 2, topY);
-        
-        if (grade >= 2) {
-            spawnBullet(centerX - 12, topY + 5);
-        }
-        
-        if (grade >= 3) {
-            spawnBullet(centerX + 8, topY + 5);
+        if (grade == 1) {
+            spawnBullet(centerX - 2, topY, 0, BULLET_SPEED);
+        } else if (grade == 2) {
+            spawnBullet(centerX - 10, topY + 3, 0, BULLET_SPEED);
+            spawnBullet(centerX + 6, topY + 3, 0, BULLET_SPEED);
+        } else if (grade == 3) {
+            spawnBullet(centerX - 2, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX - 14, topY + 5, -SPREAD_VX, BULLET_SPEED);
+            spawnBullet(centerX + 10, topY + 5, SPREAD_VX, BULLET_SPEED);
+        } else {
+            spawnBullet(centerX - 6, topY, -SPREAD_VX * 0.4, BULLET_SPEED);
+            spawnBullet(centerX + 2, topY, SPREAD_VX * 0.4, BULLET_SPEED);
+            spawnBullet(centerX - 18, topY + 6, -SPREAD_VX * 1.2, BULLET_SPEED);
+            spawnBullet(centerX + 14, topY + 6, SPREAD_VX * 1.2, BULLET_SPEED);
         }
     }
     
-    private void spawnBullet(double x, double y) {
-        spawn("playerBullet", x, y);
+    private void spawnBullet(double x, double y, double speedX, double speedY) {
+        spawn("playerBullet", new com.almasb.fxgl.entity.SpawnData(x, y)
+                .put("speedX", speedX)
+                .put("speedY", speedY));
         inc(GameVars.ACTIVE_BULLETS, 1);
     }
     
@@ -293,24 +314,72 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void trySpawnPickup(double x, double y) {
-        if (random.nextDouble() < 0.25) {
-            String pickupType = random.nextDouble() < 0.6 ? "weaponPickup" : "ammoPickup";
-            spawn(pickupType, x - 10, y - 10);
+        if (random.nextDouble() < 0.28) {
+            double roll = random.nextDouble();
+            String pickupType;
+            if (roll < 0.08) {
+                pickupType = "lifePickup";
+            } else if (roll < 0.50) {
+                pickupType = "weaponPickup";
+            } else {
+                pickupType = "ammoPickup";
+            }
+            spawn(pickupType, x - 14, y - 14);
         }
     }
     
     private void applyPickup(PickupComponent.PickupType type) {
-        if (type == PickupComponent.PickupType.WEAPON_UPGRADE) {
-            if (geti(GameVars.WEAPON_GRADE) < GameVars.MAX_WEAPON_GRADE) {
-                inc(GameVars.WEAPON_GRADE, 1);
+        String fanfareText;
+        Color fanfareColor;
+        
+        switch (type) {
+            case WEAPON_UPGRADE -> {
+                if (geti(GameVars.WEAPON_GRADE) < GameVars.MAX_WEAPON_GRADE) {
+                    inc(GameVars.WEAPON_GRADE, 1);
+                }
+                inc(GameVars.SCORE, 50);
+                fanfareText = "B O N U S";
+                fanfareColor = Color.LIME;
             }
-            inc(GameVars.SCORE, 50);
-        } else {
-            if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
-                inc(GameVars.AMMO_CAP, 1);
+            case EXTRA_AMMO -> {
+                if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
+                    inc(GameVars.AMMO_CAP, 1);
+                }
+                inc(GameVars.SCORE, 25);
+                fanfareText = "B O N U S";
+                fanfareColor = Color.CYAN;
             }
-            inc(GameVars.SCORE, 25);
+            case EXTRA_LIFE -> {
+                inc(GameVars.LIVES, 1);
+                inc(GameVars.SCORE, 100);
+                fanfareText = "E X T R A";
+                fanfareColor = Color.GOLD;
+            }
+            default -> {
+                fanfareText = null;
+                fanfareColor = null;
+            }
         }
+        
+        if (fanfareText != null) {
+            showPickupFanfare(fanfareText, fanfareColor);
+        }
+    }
+    
+    private void showPickupFanfare(String text, Color color) {
+        Text fanfare = new Text(text);
+        fanfare.setFont(Font.font("Monospace", 32));
+        fanfare.setFill(color);
+        fanfare.setStroke(Color.WHITE);
+        fanfare.setStrokeWidth(1);
+        
+        double textWidth = text.length() * 18;
+        fanfare.setTranslateX(getAppWidth() / 2 - textWidth / 2);
+        fanfare.setTranslateY(getAppHeight() / 2);
+        
+        getGameScene().addUINode(fanfare);
+        
+        runOnce(() -> getGameScene().removeUINode(fanfare), Duration.seconds(1.0));
     }
     
     private void checkWaveComplete() {

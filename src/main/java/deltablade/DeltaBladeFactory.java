@@ -12,6 +12,9 @@ import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.scene.Node;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 
@@ -101,12 +104,15 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("playerBullet")
     public Entity newPlayerBullet(SpawnData data) {
+        double speedX = data.hasKey("speedX") ? data.<Double>get("speedX") : 0.0;
+        double speedY = data.hasKey("speedY") ? data.<Double>get("speedY") : -500.0;
+        
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER_BULLET)
                 .viewWithBBox(safeTexture("bullet_player.png", BULLET_W, BULLET_H, Color.YELLOW))
                 .zIndex(75)
                 .collidable()
-                .with(new BulletComponent(-500, true))
+                .with(new BulletComponent(speedX, speedY, true))
                 .build();
     }
 
@@ -140,6 +146,49 @@ public class DeltaBladeFactory implements EntityFactory {
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
+                .build();
+    }
+
+    @Spawns("lifePickup")
+    public Entity newLifePickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(safeTexture("heart.png", PICKUP_SIZE, PICKUP_SIZE, Color.CRIMSON))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.EXTRA_LIFE))
+                .build();
+    }
+
+    @Spawns("sideRail")
+    public Entity newSideRail(SpawnData data) {
+        int width = GameVars.RAIL_WIDTH;
+        int height = data.get("height");
+        boolean isLeft = data.get("isLeft");
+
+        LinearGradient gradient;
+        if (isLeft) {
+            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(20, 40, 60)),
+                    new Stop(0.5, Color.rgb(60, 180, 220)),
+                    new Stop(0.7, Color.rgb(40, 120, 160)),
+                    new Stop(1, Color.rgb(10, 20, 30)));
+        } else {
+            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(10, 20, 30)),
+                    new Stop(0.3, Color.rgb(40, 120, 160)),
+                    new Stop(0.5, Color.rgb(60, 180, 220)),
+                    new Stop(1, Color.rgb(20, 40, 60)));
+        }
+
+        Rectangle rail = new Rectangle(width, height);
+        rail.setFill(gradient);
+        rail.setStroke(Color.CYAN);
+        rail.setStrokeWidth(1);
+
+        return FXGL.entityBuilder(data)
+                .view(rail)
+                .zIndex(200)
                 .build();
     }
 

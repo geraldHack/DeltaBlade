@@ -25,14 +25,22 @@ public class ExtraLetterPickupComponent extends Component {
     @Override
     public void onAdded() {
         Node view = entity.getViewComponent().getChildren().get(0);
-        if (view instanceof Group group) {
+        letterText = findTextInGroup(view);
+    }
+    
+    private Text findTextInGroup(Node node) {
+        if (node instanceof Text t) {
+            return t;
+        }
+        if (node instanceof Group group) {
             for (Node child : group.getChildren()) {
-                if (child instanceof Text t) {
-                    letterText = t;
-                    break;
+                Text found = findTextInGroup(child);
+                if (found != null) {
+                    return found;
                 }
             }
         }
+        return null;
     }
     
     @Override

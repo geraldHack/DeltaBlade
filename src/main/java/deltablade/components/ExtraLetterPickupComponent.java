@@ -12,8 +12,7 @@ public class ExtraLetterPickupComponent extends Component {
     private final int letterIndex;
     private final Text letterText;
     private final Group flipWrapper;
-    private double speed = 65;
-    private double pulsePhase = 0;
+    private double speed = 80;
     private double flipPhase = 0;
     
     public ExtraLetterPickupComponent(char letter, int letterIndex, Text letterText) {
@@ -35,11 +34,6 @@ public class ExtraLetterPickupComponent extends Component {
     public void onUpdate(double tpf) {
         entity.translateY(speed * tpf);
         
-        pulsePhase += tpf * 4;
-        double scale = 1 + Math.sin(pulsePhase) * 0.12;
-        entity.setScaleX(scale);
-        entity.setScaleY(scale);
-        
         if (flipWrapper != null) {
             flipPhase += tpf * 2.5;
             double scaleX = Math.cos(flipPhase);
@@ -58,7 +52,7 @@ public class ExtraLetterPickupComponent extends Component {
             entity.setX(playableRight - 16);
         }
         
-        if (entity.getY() > FXGL.getAppHeight() + 20) {
+        if (entity.getY() > FXGL.getAppHeight() + 80) {
             entity.removeFromWorld();
         }
     }

@@ -234,7 +234,6 @@ public class WaveManager {
         text.setTranslateY(113);
         
         Group banner = new Group(bar, text);
-        banner.setViewOrder(-1000);
         
         getGameScene().addUINode(banner);
         

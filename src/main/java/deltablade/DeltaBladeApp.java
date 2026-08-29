@@ -108,14 +108,14 @@ public class DeltaBladeApp extends GameApplication {
             }
         }, KeyCode.SPACE);
         
-        getInput().addAction(new UserAction("Fire Ctrl") {
+        getInput().addAction(new UserAction("Fire X") {
             @Override
             protected void onAction() {
                 if (!gameOver) {
                     fire();
                 }
             }
-        }, KeyCode.CONTROL);
+        }, KeyCode.X);
         
         getInput().addAction(new UserAction("Restart") {
             @Override

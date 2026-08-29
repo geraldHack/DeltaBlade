@@ -8,10 +8,15 @@ import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
+import javafx.animation.FadeTransition;
+import javafx.animation.TranslateTransition;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.effect.Glow;
 import javafx.scene.input.KeyCode;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
 
@@ -147,12 +152,28 @@ public class DeltaBladeApp extends GameApplication {
                 .put("width", getAppWidth())
                 .put("height", getAppHeight()));
         
+        spawnSideRails();
         spawnStars();
         
         waveManager = new WaveManager();
         
         spawnPlayer();
         startWave();
+    }
+    
+    private void spawnSideRails() {
+        int railWidth = GameVars.RAIL_WIDTH;
+        int height = getAppHeight();
+        
+        spawn("sideRail", new com.almasb.fxgl.entity.SpawnData(0, 0)
+                .put("width", railWidth)
+                .put("height", height)
+                .put("isLeft", true));
+        
+        spawn("sideRail", new com.almasb.fxgl.entity.SpawnData(getAppWidth() - railWidth, 0)
+                .put("width", railWidth)
+                .put("height", height)
+                .put("isLeft", false));
     }
     
     private void spawnStars() {
@@ -191,6 +212,8 @@ public class DeltaBladeApp extends GameApplication {
         runOnce(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
     }
     
+    private static final double SPREAD_ANGLE = 80.0;
+    
     private void fire() {
         if (player == null || gameOver) return;
         
@@ -204,19 +227,31 @@ public class DeltaBladeApp extends GameApplication {
         double centerX = pc.getCenterX();
         double topY = pc.getTopY();
         
-        spawnBullet(centerX - 2, topY);
-        
-        if (grade >= 2) {
-            spawnBullet(centerX - 12, topY + 5);
-        }
-        
-        if (grade >= 3) {
-            spawnBullet(centerX + 8, topY + 5);
+        switch (grade) {
+            case 1 -> {
+                spawnBullet(centerX - 2, topY, 0);
+            }
+            case 2 -> {
+                spawnBullet(centerX - 10, topY + 3, 0);
+                spawnBullet(centerX + 6, topY + 3, 0);
+            }
+            case 3 -> {
+                spawnBullet(centerX - 2, topY, 0);
+                spawnBullet(centerX - 14, topY + 8, -SPREAD_ANGLE);
+                spawnBullet(centerX + 10, topY + 8, SPREAD_ANGLE);
+            }
+            case 4 -> {
+                spawnBullet(centerX - 8, topY + 2, -SPREAD_ANGLE * 0.3);
+                spawnBullet(centerX + 4, topY + 2, SPREAD_ANGLE * 0.3);
+                spawnBullet(centerX - 18, topY + 10, -SPREAD_ANGLE);
+                spawnBullet(centerX + 14, topY + 10, SPREAD_ANGLE);
+            }
         }
     }
     
-    private void spawnBullet(double x, double y) {
-        spawn("playerBullet", x, y);
+    private void spawnBullet(double x, double y, double spreadX) {
+        spawn("playerBullet", new com.almasb.fxgl.entity.SpawnData(x, y)
+                .put("speedX", spreadX));
         inc(GameVars.ACTIVE_BULLETS, 1);
     }
     
@@ -293,24 +328,87 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void trySpawnPickup(double x, double y) {
-        if (random.nextDouble() < 0.25) {
-            String pickupType = random.nextDouble() < 0.6 ? "weaponPickup" : "ammoPickup";
+        if (random.nextDouble() < 0.28) {
+            double roll = random.nextDouble();
+            String pickupType;
+            if (roll < 0.50) {
+                pickupType = "weaponPickup";
+            } else if (roll < 0.85) {
+                pickupType = "ammoPickup";
+            } else {
+                pickupType = "lifePickup";
+            }
             spawn(pickupType, x - 10, y - 10);
         }
     }
     
     private void applyPickup(PickupComponent.PickupType type) {
-        if (type == PickupComponent.PickupType.WEAPON_UPGRADE) {
-            if (geti(GameVars.WEAPON_GRADE) < GameVars.MAX_WEAPON_GRADE) {
-                inc(GameVars.WEAPON_GRADE, 1);
+        String bonusText;
+        Color textColor;
+        
+        switch (type) {
+            case WEAPON_UPGRADE -> {
+                if (geti(GameVars.WEAPON_GRADE) < GameVars.MAX_WEAPON_GRADE) {
+                    inc(GameVars.WEAPON_GRADE, 1);
+                }
+                inc(GameVars.SCORE, 50);
+                bonusText = "B O N U S";
+                textColor = Color.LIME;
             }
-            inc(GameVars.SCORE, 50);
-        } else {
-            if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
-                inc(GameVars.AMMO_CAP, 1);
+            case EXTRA_AMMO -> {
+                if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
+                    inc(GameVars.AMMO_CAP, 1);
+                }
+                inc(GameVars.SCORE, 25);
+                bonusText = "B O N U S";
+                textColor = Color.CYAN;
             }
-            inc(GameVars.SCORE, 25);
+            case EXTRA_LIFE -> {
+                inc(GameVars.LIVES, 1);
+                inc(GameVars.SCORE, 100);
+                bonusText = "E X T R A";
+                textColor = Color.MAGENTA;
+            }
+            default -> {
+                bonusText = "B O N U S";
+                textColor = Color.WHITE;
+            }
         }
+        
+        showFloatingBonusText(bonusText, textColor);
+    }
+    
+    private void showFloatingBonusText(String message, Color color) {
+        Text bonusLabel = new Text(message);
+        bonusLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 42));
+        bonusLabel.setFill(color);
+        
+        DropShadow shadow = new DropShadow();
+        shadow.setColor(Color.BLACK);
+        shadow.setRadius(4);
+        shadow.setOffsetX(2);
+        shadow.setOffsetY(2);
+        
+        Glow glow = new Glow(0.8);
+        glow.setInput(shadow);
+        bonusLabel.setEffect(glow);
+        
+        double textWidth = bonusLabel.getLayoutBounds().getWidth();
+        bonusLabel.setTranslateX((getAppWidth() - textWidth) / 2);
+        bonusLabel.setTranslateY(getAppHeight() / 2);
+        
+        getGameScene().addUINode(bonusLabel);
+        
+        TranslateTransition moveUp = new TranslateTransition(Duration.seconds(1), bonusLabel);
+        moveUp.setByY(-80);
+        
+        FadeTransition fadeOut = new FadeTransition(Duration.seconds(1), bonusLabel);
+        fadeOut.setFromValue(1.0);
+        fadeOut.setToValue(0.0);
+        fadeOut.setOnFinished(e -> getGameScene().removeUINode(bonusLabel));
+        
+        moveUp.play();
+        fadeOut.play();
     }
     
     private void checkWaveComplete() {
@@ -401,28 +499,29 @@ public class DeltaBladeApp extends GameApplication {
         Text scoreLabel = new Text();
         scoreLabel.setFont(Font.font("Monospace", 16));
         scoreLabel.setFill(Color.WHITE);
-        scoreLabel.setTranslateX(10);
+        int railOffset = GameVars.RAIL_WIDTH + 6;
+        scoreLabel.setTranslateX(railOffset);
         scoreLabel.setTranslateY(25);
         scoreLabel.textProperty().bind(getip(GameVars.SCORE).asString("SCORE: %d"));
         
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 16));
         levelLabel.setFill(Color.WHITE);
-        levelLabel.setTranslateX(10);
+        levelLabel.setTranslateX(railOffset);
         levelLabel.setTranslateY(45);
         levelLabel.textProperty().bind(getip(GameVars.LEVEL).asString("LEVEL: %d"));
         
         Text livesLabel = new Text();
         livesLabel.setFont(Font.font("Monospace", 16));
         livesLabel.setFill(Color.RED);
-        livesLabel.setTranslateX(getAppWidth() - 120);
+        livesLabel.setTranslateX(getAppWidth() - railOffset - 90);
         livesLabel.setTranslateY(25);
         livesLabel.textProperty().bind(getip(GameVars.LIVES).asString("LIVES: %d"));
         
         Text weaponLabel = new Text();
         weaponLabel.setFont(Font.font("Monospace", 16));
         weaponLabel.setFill(Color.LIME);
-        weaponLabel.setTranslateX(getAppWidth() - 120);
+        weaponLabel.setTranslateX(getAppWidth() - railOffset - 90);
         weaponLabel.setTranslateY(45);
         weaponLabel.textProperty().bind(getip(GameVars.WEAPON_GRADE).asString("WEAPON: %d"));
         

@@ -2,6 +2,7 @@ package deltablade.components;
 
 import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.component.Component;
+import deltablade.GameVars;
 import deltablade.WaveManager;
 
 import java.util.Random;
@@ -156,8 +157,11 @@ public class EnemyComponent extends Component {
         
         entity.translateX(speedX * tpf);
         
-        if (entity.getX() <= 0 || entity.getRightX() >= FXGL.getAppWidth()) {
+        int railWidth = GameVars.RAIL_WIDTH;
+        if (entity.getX() <= railWidth || entity.getRightX() >= FXGL.getAppWidth() - railWidth) {
             speedX = -speedX;
+            double clampedX = Math.max(railWidth, Math.min(entity.getX(), FXGL.getAppWidth() - railWidth - entity.getWidth()));
+            entity.setX(clampedX);
         }
         
         if (formationHoldTime > minFormationTime) {

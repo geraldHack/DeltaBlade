@@ -9,7 +9,11 @@ import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 
@@ -62,12 +66,13 @@ public class DeltaBladeFactory implements EntityFactory {
     
     @Spawns("playerBullet")
     public Entity newPlayerBullet(SpawnData data) {
+        double speedX = data.hasKey("speedX") ? data.<Double>get("speedX") : 0.0;
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER_BULLET)
                 .viewWithBBox(texture("bullet_player.png", 20, 32))
                 .zIndex(75)
                 .collidable()
-                .with(new BulletComponent(-500, true))
+                .with(new BulletComponent(-500, speedX, true))
                 .build();
     }
     
@@ -101,6 +106,53 @@ public class DeltaBladeFactory implements EntityFactory {
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
+                .build();
+    }
+    
+    @Spawns("lifePickup")
+    public Entity newLifePickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(texture("heart.png", 32, 32))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.EXTRA_LIFE))
+                .build();
+    }
+    
+    @Spawns("sideRail")
+    public Entity newSideRail(SpawnData data) {
+        int width = data.get("width");
+        int height = data.get("height");
+        boolean isLeft = data.get("isLeft");
+        
+        Rectangle rail = new Rectangle(width, height);
+        
+        LinearGradient gradient;
+        if (isLeft) {
+            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(40, 60, 80)),
+                    new Stop(0.3, Color.rgb(60, 100, 140)),
+                    new Stop(0.7, Color.rgb(80, 140, 180)),
+                    new Stop(1.0, Color.rgb(30, 50, 70)));
+        } else {
+            gradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(30, 50, 70)),
+                    new Stop(0.3, Color.rgb(80, 140, 180)),
+                    new Stop(0.7, Color.rgb(60, 100, 140)),
+                    new Stop(1.0, Color.rgb(40, 60, 80)));
+        }
+        rail.setFill(gradient);
+        
+        DropShadow glow = new DropShadow();
+        glow.setColor(Color.rgb(100, 180, 255, 0.6));
+        glow.setRadius(8);
+        glow.setSpread(0.2);
+        rail.setEffect(glow);
+        
+        return FXGL.entityBuilder(data)
+                .view(rail)
+                .zIndex(200)
                 .build();
     }
     

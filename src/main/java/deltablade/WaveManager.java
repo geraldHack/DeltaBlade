@@ -78,14 +78,16 @@ public class WaveManager {
         int rows = (int) Math.ceil((double) targetEnemies / cols);
         rows = Math.min(rows, 3);
         
-        double spacingX = getAppWidth() / (cols + 1.0);
+        int railWidth = GameVars.RAIL_WIDTH;
+        double playableWidth = getAppWidth() - 2 * railWidth;
+        double spacingX = playableWidth / (cols + 1.0);
         double spacingY = 45;
         double startY = 60;
         
         int slotsCreated = 0;
         for (int row = 0; row < rows && slotsCreated < targetEnemies; row++) {
             for (int col = 0; col < cols && slotsCreated < targetEnemies; col++) {
-                double x = spacingX * (col + 1) - 15;
+                double x = railWidth + spacingX * (col + 1) - 15;
                 double y = startY + row * spacingY;
                 formationSlots.add(new Point2D(x, y));
                 slotsCreated++;

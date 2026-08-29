@@ -12,9 +12,6 @@ import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.scene.Group;
 import javafx.scene.Node;
-import javafx.scene.effect.ColorAdjust;
-import javafx.scene.effect.DropShadow;
-import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
@@ -28,75 +25,170 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 
+import java.io.File;
 import java.io.InputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.net.URL;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DeltaBladeFactory implements EntityFactory {
-
-    private static final Logger LOG = Logger.getLogger(DeltaBladeFactory.class.getName());
 
     private static final int SHIP_SIZE = 48;
     private static final int BULLET_W = 12;
     private static final int BULLET_H = 20;
     private static final int PICKUP_SIZE = 28;
+    
+    private static final ConcurrentHashMap<String, Image> imageCache = new ConcurrentHashMap<>();
+    private static final Set<String> failedSprites = ConcurrentHashMap.newKeySet();
+    private static volatile boolean errorBannerShown = false;
+    
+    private static final String[] TEXTURE_PATHS = {
+        "assets/textures/",
+        "/assets/textures/",
+        "textures/",
+        "/textures/"
+    };
+    
+    private static final String[] FILE_FALLBACKS = {
+        "src/main/resources/assets/textures/",
+        "target/classes/assets/textures/"
+    };
 
-    /**
-     * Load a PNG directly from classpath, bypassing FXGL's asset loader entirely.
-     * This avoids Mac-specific issues with FXGL.texture() that cause missing-texture placeholders.
-     * Returns crisp pixel-art scaled ImageView, or logs loudly and returns a visible error indicator.
-     */
-    private static Node loadSprite(String filename, int w, int h, Color errorColor) {
-        String path = "/assets/textures/" + filename;
+    private static Image loadImage(String filename) {
+        if (imageCache.containsKey(filename)) {
+            return imageCache.get(filename);
+        }
+        
+        Image img = null;
+        
+        for (String basePath : TEXTURE_PATHS) {
+            String resourcePath = basePath + filename;
+            
+            try {
+                ClassLoader contextCL = Thread.currentThread().getContextClassLoader();
+                if (contextCL != null) {
+                    URL url = contextCL.getResource(resourcePath);
+                    if (url != null) {
+                        img = new Image(url.toExternalForm(), false);
+                        if (!img.isError() && img.getWidth() > 0) {
+                            imageCache.put(filename, img);
+                            return img;
+                        }
+                    }
+                    
+                    InputStream is = contextCL.getResourceAsStream(resourcePath);
+                    if (is != null) {
+                        img = new Image(is);
+                        is.close();
+                        if (!img.isError() && img.getWidth() > 0) {
+                            imageCache.put(filename, img);
+                            return img;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            
+            try {
+                ClassLoader classCL = DeltaBladeFactory.class.getClassLoader();
+                if (classCL != null) {
+                    URL url = classCL.getResource(resourcePath);
+                    if (url != null) {
+                        img = new Image(url.toExternalForm(), false);
+                        if (!img.isError() && img.getWidth() > 0) {
+                            imageCache.put(filename, img);
+                            return img;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            
+            try {
+                URL url = DeltaBladeFactory.class.getResource("/" + resourcePath.replaceFirst("^/", ""));
+                if (url != null) {
+                    img = new Image(url.toExternalForm(), false);
+                    if (!img.isError() && img.getWidth() > 0) {
+                        imageCache.put(filename, img);
+                        return img;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        
+        String userDir = System.getProperty("user.dir", ".");
+        for (String fallbackPath : FILE_FALLBACKS) {
+            try {
+                File file = new File(userDir, fallbackPath + filename);
+                if (file.exists() && file.canRead()) {
+                    img = new Image(file.toURI().toString(), false);
+                    if (!img.isError() && img.getWidth() > 0) {
+                        imageCache.put(filename, img);
+                        return img;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        
         try {
-            InputStream is = DeltaBladeFactory.class.getResourceAsStream(path);
-            if (is == null) {
-                LOG.log(Level.SEVERE, "SPRITE NOT FOUND: {0} - check classpath!", path);
-                return createErrorIndicator(w, h, errorColor, "NOT FOUND: " + filename);
+            img = FXGL.getAssetLoader().loadImage(filename);
+            if (img != null && !img.isError() && img.getWidth() > 0) {
+                boolean isMagentaPlaceholder = img.getWidth() == 64 && img.getHeight() == 64;
+                if (!isMagentaPlaceholder) {
+                    imageCache.put(filename, img);
+                    return img;
+                }
             }
-            Image img = new Image(is);
-            is.close();
-            if (img.isError()) {
-                LOG.log(Level.SEVERE, "SPRITE LOAD ERROR: {0} - {1}", new Object[]{path, img.getException()});
-                return createErrorIndicator(w, h, errorColor, "ERROR: " + filename);
-            }
-            ImageView iv = new ImageView(img);
-            iv.setFitWidth(w);
-            iv.setFitHeight(h);
-            iv.setPreserveRatio(false);
-            iv.setSmooth(false);
-            return iv;
-        } catch (Exception e) {
-            LOG.log(Level.SEVERE, "SPRITE EXCEPTION: " + path, e);
-            return createErrorIndicator(w, h, errorColor, "EXC: " + filename);
+        } catch (Exception ignored) {}
+        
+        return null;
+    }
+    
+    private static void showSpriteErrorBanner(String filename) {
+        if (!failedSprites.add(filename)) {
+            return;
+        }
+        
+        if (!errorBannerShown) {
+            errorBannerShown = true;
+            try {
+                javafx.application.Platform.runLater(() -> {
+                    try {
+                        String message = "Sprite nicht geladen: " + String.join(", ", failedSprites);
+                        FXGL.getNotificationService().pushNotification(message);
+                    } catch (Exception e) {
+                        Text errorText = new Text("Sprites fehlen: " + String.join(", ", failedSprites));
+                        errorText.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+                        errorText.setFill(Color.ORANGERED);
+                        errorText.setTranslateX(FXGL.getAppWidth() / 2 - 120);
+                        errorText.setTranslateY(50);
+                        FXGL.getGameScene().addUINode(errorText);
+                        FXGL.runOnce(() -> FXGL.getGameScene().removeUINode(errorText), 
+                                    javafx.util.Duration.seconds(5));
+                    }
+                });
+            } catch (Exception ignored) {}
         }
     }
-
-    private static Node createErrorIndicator(int w, int h, Color color, String msg) {
-        Rectangle r = new Rectangle(w, h, color);
-        r.setStroke(Color.WHITE);
-        r.setStrokeWidth(2);
-        Text t = new Text("!");
-        t.setFill(Color.WHITE);
-        t.setFont(Font.font("Monospace", FontWeight.BOLD, Math.min(w, h) / 2));
-        t.setTranslateX(w / 2 - 5);
-        t.setTranslateY(h / 2 + 5);
-        Group g = new Group(r, t);
-        LOG.warning("Showing error indicator for: " + msg);
-        return g;
-    }
-
-    private static Node loadSpriteWithTint(String filename, int w, int h, Color tint, Color errorColor) {
-        Node sprite = loadSprite(filename, w, h, errorColor);
-        if (sprite instanceof ImageView iv && tint != null && !tint.equals(Color.WHITE)) {
-            double hue = (tint.getHue() - Color.WHITE.getHue()) / 360.0;
-            double sat = tint.getSaturation();
-            ColorAdjust colorAdjust = new ColorAdjust();
-            colorAdjust.setHue(hue);
-            colorAdjust.setSaturation(sat * 0.5);
-            iv.setEffect(colorAdjust);
+    
+    private static Node loadSprite(String filename, int w, int h, Color fallbackColor) {
+        Image img = loadImage(filename);
+        
+        if (img != null && !img.isError()) {
+            ImageView view = new ImageView(img);
+            view.setFitWidth(w);
+            view.setFitHeight(h);
+            view.setSmooth(false);
+            view.setPreserveRatio(false);
+            return view;
         }
-        return sprite;
+        
+        showSpriteErrorBanner(filename);
+        
+        Rectangle marker = new Rectangle(w * 0.6, h * 0.6, fallbackColor.deriveColor(0, 0.5, 0.7, 0.8));
+        marker.setStroke(fallbackColor.darker());
+        marker.setStrokeWidth(1);
+        marker.setTranslateX(w * 0.2);
+        marker.setTranslateY(h * 0.2);
+        return marker;
     }
 
     @Spawns("player")
@@ -127,13 +219,7 @@ public class DeltaBladeFactory implements EntityFactory {
             default -> Color.CRIMSON;
         };
 
-        Color tint = switch (type) {
-            case FAST -> Color.LIGHTGREEN;
-            case TOUGH -> Color.VIOLET;
-            default -> Color.WHITE;
-        };
-
-        Node view = loadSpriteWithTint(textureName, SHIP_SIZE, SHIP_SIZE, tint, fallback);
+        Node view = loadSprite(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
 
         EnemyComponent enemyComponent = new EnemyComponent(type, level);
 
@@ -227,28 +313,20 @@ public class DeltaBladeFactory implements EntityFactory {
         
         Circle orb = new Circle(16);
         orb.setFill(gradient);
-        orb.setStroke(Color.WHITE);
-        orb.setStrokeWidth(2);
-        
-        Glow glow = new Glow(0.7);
-        DropShadow shadow = new DropShadow(12, orbColor);
-        glow.setInput(shadow);
-        orb.setEffect(glow);
+        orb.setStroke(orbColor.darker());
+        orb.setStrokeWidth(1.5);
         
         Text letterText = new Text(String.valueOf(letter));
         letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
         letterText.setFill(Color.WHITE);
-        letterText.setStroke(Color.rgb(0, 0, 0, 0.5));
-        letterText.setStrokeWidth(1);
         letterText.setTranslateX(-6);
         letterText.setTranslateY(6);
         
-        DropShadow letterShadow = new DropShadow(3, Color.BLACK);
-        Glow letterGlow = new Glow(0.4);
-        letterGlow.setInput(letterShadow);
-        letterText.setEffect(letterGlow);
+        Circle clipCircle = new Circle(15);
+        Group contentGroup = new Group(orb, letterText);
+        contentGroup.setClip(clipCircle);
         
-        Group group = new Group(orb, letterText);
+        Group group = new Group(contentGroup);
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.EXTRA_LETTER_PICKUP)

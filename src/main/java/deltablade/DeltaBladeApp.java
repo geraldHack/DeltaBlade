@@ -808,7 +808,16 @@ public class DeltaBladeApp extends GameApplication {
         letterText.setTranslateY(0);
         extraLetterTexts[index] = letterText;
         
-        Group letterGroup = new Group(frame, letterText);
+        Rectangle clipRect = new Rectangle(24, 24);
+        clipRect.setArcWidth(4);
+        clipRect.setArcHeight(4);
+        clipRect.setTranslateX(-12);
+        clipRect.setTranslateY(-18);
+        
+        Group contentGroup = new Group(frame, letterText);
+        contentGroup.setClip(clipRect);
+        
+        Group letterGroup = new Group(contentGroup);
         letterGroup.setTranslateX(x);
         letterGroup.setTranslateY(y);
         
@@ -820,14 +829,11 @@ public class DeltaBladeApp extends GameApplication {
     private void updateExtraLetter(int idx, boolean lit, Color litColor) {
         Text letterText = extraLetterTexts[idx];
         Group letterGroup = extraLetterGroups[idx];
+        Group contentGroup = (Group) letterGroup.getChildren().get(0);
+        Rectangle frame = (Rectangle) contentGroup.getChildren().get(0);
         
         if (lit) {
             letterText.setFill(litColor);
-            
-            Glow glow = new Glow(0.5);
-            DropShadow shadow = new DropShadow(8, litColor);
-            glow.setInput(shadow);
-            letterText.setEffect(glow);
             
             letterText.getTransforms().clear();
             letterText.setScaleX(1.0);
@@ -850,7 +856,6 @@ public class DeltaBladeApp extends GameApplication {
             flipTimeline.play();
             extraLetterAnimations.add(flipTimeline);
             
-            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(litColor.darker());
             
         } else {
@@ -859,7 +864,6 @@ public class DeltaBladeApp extends GameApplication {
             letterText.getTransforms().clear();
             letterText.setScaleX(1.0);
             
-            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(Color.rgb(60, 70, 90));
         }
     }

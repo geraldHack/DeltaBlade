@@ -6,7 +6,8 @@ import deltablade.GameVars;
 
 public class PlayerComponent extends Component {
     
-    private double speed = 300;
+    private static final double MAX_TPF = 1.0 / 30.0;
+    private double speed = 230;
     private boolean invulnerable = false;
     private double invulnerableTimer = 0;
     private static final double INVULNERABLE_DURATION = 2.0;
@@ -16,6 +17,8 @@ public class PlayerComponent extends Component {
     
     @Override
     public void onUpdate(double tpf) {
+        tpf = Math.min(tpf, MAX_TPF);
+        
         if (fireCooldown > 0) {
             fireCooldown -= tpf;
         }

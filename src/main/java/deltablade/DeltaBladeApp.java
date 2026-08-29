@@ -129,6 +129,8 @@ public class DeltaBladeApp extends GameApplication {
     
     @Override
     protected void initGame() {
+        getGameScene().clearUINodes();
+        
         gameOver = false;
         movingLeft = false;
         movingRight = false;
@@ -372,9 +374,13 @@ public class DeltaBladeApp extends GameApplication {
         getGameController().startNewGame();
     }
     
+    private static final double MAX_TPF = 1.0 / 30.0;
+    
     @Override
     protected void onUpdate(double tpf) {
         if (gameOver || player == null) return;
+        
+        tpf = Math.min(tpf, MAX_TPF);
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
         

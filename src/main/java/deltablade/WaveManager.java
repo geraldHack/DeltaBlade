@@ -214,7 +214,7 @@ public class WaveManager {
         bonusText.setFont(Font.font("Monospace", 24));
         bonusText.setFill(Color.GOLD);
         bonusText.setTranslateX(getAppWidth() / 2 - 100);
-        bonusText.setTranslateY(getAppHeight() / 2);
+        bonusText.setTranslateY(getAppHeight() * 0.58);
         
         getGameScene().addUINode(bonusText);
         

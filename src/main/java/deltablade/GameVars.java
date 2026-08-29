@@ -8,13 +8,26 @@ public final class GameVars {
     public static final String AMMO_CAP = "ammoCap";
     public static final String ACTIVE_BULLETS = "activeBullets";
     public static final String ENEMIES_REMAINING = "enemiesRemaining";
+    public static final String MONEY = "money";
+    public static final String EXTRA_E = "extraE";
+    public static final String EXTRA_X = "extraX";
+    public static final String EXTRA_T = "extraT";
+    public static final String EXTRA_R = "extraR";
+    public static final String EXTRA_A = "extraA";
     
     public static final int INITIAL_LIVES = 3;
     public static final int INITIAL_AMMO_CAP = 5;
     public static final int MAX_AMMO_CAP = 12;
     public static final int MAX_WEAPON_GRADE = 4;
     
-    public static final int RAIL_WIDTH = 32;
+    public static final int RAIL_WIDTH = 64;
+    
+    public static final char[] EXTRA_LETTERS = {'E', 'X', 'T', 'R', 'A'};
+    public static final String[] EXTRA_VARS = {EXTRA_E, EXTRA_X, EXTRA_T, EXTRA_R, EXTRA_A};
+    
+    public static final int KILL_MONEY_BASE = 5;
+    public static final int WAVE_CLEAR_MONEY = 50;
+    public static final double EXTRA_LETTER_DROP_CHANCE = 0.12;
     
     private GameVars() {}
 }

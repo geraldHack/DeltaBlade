@@ -129,6 +129,13 @@ public class DeltaBladeApp extends GameApplication {
     
     @Override
     protected void initGame() {
+        gameOver = false;
+        movingLeft = false;
+        movingRight = false;
+        waveTransition = false;
+        player = null;
+        waveManager = null;
+        
         getGameWorld().addEntityFactory(new DeltaBladeFactory());
         
         getGameScene().getViewport().setX(0);

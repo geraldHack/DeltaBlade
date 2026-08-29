@@ -185,4 +185,16 @@ The architecture is ready for future features:
 
 ---
 
-*DeltaBlade is an original game. All graphics are procedurally generated using JavaFX shapes.*
+## Credits / Danksagungen
+
+### Pixel Art Assets
+The pixel art sprites used in this game are from the **Space Shooter Pack** by **RGS_Dev (Raphael Gonçalves)**.
+
+- **Asset Pack**: [Space Shooter Pack - Pixel Art 2D by RGS_Dev](https://rgsdev.itch.io/space-shooter-pack-pixel-art-2d-by-rgsdev)
+- **License**: Free to use in games. Do not resell or redistribute as an asset pack.
+
+Die Pixel-Art-Sprites in diesem Spiel stammen aus dem **Space Shooter Pack** von **RGS_Dev (Raphael Gonçalves)**.
+
+---
+
+*DeltaBlade is an original game built with FXGL and pixel art assets by RGS_Dev.*

@@ -126,20 +126,27 @@ public class WaveManager {
             
             EnemyComponent.EnemyType type = determineEnemyType(enemiesSpawned / 8, currentLevel);
             
-            double delay = i * 0.15;
+            final int index = i;
+            final int squadIdFinal = squad.id;
             
-            run(() -> {
+            Runnable spawnEnemy = () -> {
                 Entity enemy = spawn("enemy", new SpawnData(path.startX, path.startY)
                         .put("enemyType", type)
                         .put("level", currentLevel)
                         .put("targetX", targetSlot.getX())
                         .put("targetY", targetSlot.getY())
                         .put("entryPath", path)
-                        .put("squadId", squad.id)
+                        .put("squadId", squadIdFinal)
                         .put("entering", true));
                 
                 squad.addEnemy(enemy);
-            }, javafx.util.Duration.seconds(delay));
+            };
+            
+            if (index == 0) {
+                spawnEnemy.run();
+            } else {
+                run(spawnEnemy, javafx.util.Duration.seconds(index * 0.15));
+            }
             
             enemiesSpawned++;
         }

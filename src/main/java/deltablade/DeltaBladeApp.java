@@ -131,11 +131,9 @@ public class DeltaBladeApp extends GameApplication {
     protected void initGame() {
         getGameWorld().addEntityFactory(new DeltaBladeFactory());
         
-        Rectangle bg = new Rectangle(getAppWidth(), getAppHeight(), Color.BLACK);
-        getGameScene().addUINode(bg);
-        bg.toBack();
+        getGameScene().setBackgroundColor(Color.BLACK);
         
-        addStars();
+        spawnStars();
         
         waveManager = new WaveManager();
         
@@ -143,18 +141,16 @@ public class DeltaBladeApp extends GameApplication {
         startWave();
     }
     
-    private void addStars() {
+    private void spawnStars() {
         for (int i = 0; i < 80; i++) {
             double x = random.nextDouble() * getAppWidth();
             double y = random.nextDouble() * getAppHeight();
             double size = random.nextDouble() * 2 + 1;
+            double opacity = 0.3 + random.nextDouble() * 0.7;
             
-            Rectangle star = new Rectangle(size, size, Color.WHITE);
-            star.setOpacity(0.3 + random.nextDouble() * 0.7);
-            star.setTranslateX(x);
-            star.setTranslateY(y);
-            getGameScene().addUINode(star);
-            star.toBack();
+            spawn("star", new com.almasb.fxgl.entity.SpawnData(x, y)
+                    .put("size", size)
+                    .put("opacity", opacity));
         }
     }
     
@@ -219,6 +215,11 @@ public class DeltaBladeApp extends GameApplication {
     
     public void onSquadMemberSettled(int squadId) {
         waveManager.markSquadSettled(squadId);
+    }
+    
+    public void onEnemyLeftScreen(int squadId) {
+        inc(GameVars.ENEMIES_REMAINING, -1);
+        checkWaveComplete();
     }
     
     @Override

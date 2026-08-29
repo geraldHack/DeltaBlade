@@ -36,15 +36,17 @@ public class DeltaBladeFactory implements EntityFactory {
     private static final int PICKUP_SIZE = 28;
 
     /**
-     * Load a texture resized to w×h. If FXGL cannot load the asset, return a
-     * solid colored shape so we never show the magenta/black missing placeholder.
+     * Load a texture and resize it using setFitWidth/Height for better compatibility.
+     * Falls back to a colored rectangle only if the texture truly cannot be loaded.
      */
     private static Node safeTexture(String name, int w, int h, Color fallback) {
         try {
-            Texture t = texture(name, w, h);
-            if (t == null) {
+            Texture t = texture(name);
+            if (t == null || t.getImage() == null || t.getImage().isError()) {
                 return new Rectangle(w, h, fallback);
             }
+            t.setFitWidth(w);
+            t.setFitHeight(h);
             return t;
         } catch (Exception e) {
             return new Rectangle(w, h, fallback);
@@ -67,29 +69,19 @@ public class DeltaBladeFactory implements EntityFactory {
         EnemyComponent.EnemyType type = data.get("enemyType");
         int level = data.get("level");
 
-        // Use only textures that reliably load. Variants via multiplyColor.
-        // (enemy_fast/tough were showing as magenta missing-texture checkers on Mac.)
+        String textureName = switch (type) {
+            case FAST -> "enemy_fast.png";
+            case TOUGH -> "enemy_tough.png";
+            default -> "enemy_basic.png";
+        };
+        
         Color fallback = switch (type) {
             case FAST -> Color.LIME;
             case TOUGH -> Color.MEDIUMPURPLE;
             default -> Color.CRIMSON;
         };
-        Color tint = switch (type) {
-            case FAST -> Color.LIGHTGREEN;
-            case TOUGH -> Color.VIOLET;
-            default -> Color.WHITE;
-        };
 
-        Node view;
-        try {
-            Texture t = texture("enemy_basic.png", SHIP_SIZE, SHIP_SIZE);
-            if (type != EnemyComponent.EnemyType.BASIC) {
-                t = t.multiplyColor(tint);
-            }
-            view = t;
-        } catch (Exception e) {
-            view = new Rectangle(SHIP_SIZE, SHIP_SIZE, fallback);
-        }
+        Node view = safeTexture(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
 
         EnemyComponent enemyComponent = new EnemyComponent(type, level);
 

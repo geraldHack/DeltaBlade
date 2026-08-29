@@ -34,6 +34,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.transform.Rotate;
+import javafx.scene.transform.Scale;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
@@ -352,7 +353,7 @@ public class DeltaBladeApp extends GameApplication {
         waveText.setFont(Font.font("Monospace", 36));
         waveText.setFill(Color.YELLOW);
         waveText.setTranslateX(getAppWidth() / 2 - 80);
-        waveText.setTranslateY(getAppHeight() / 2 - 100);
+        waveText.setTranslateY(getAppHeight() * 0.58);
         
         getGameScene().addUINode(waveText);
         
@@ -538,12 +539,12 @@ public class DeltaBladeApp extends GameApplication {
     
     private void showExtraLifeFlash() {
         Text flash = new Text("+1 LIFE!");
-        flash.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
+        flash.setFont(Font.font("Monospace", FontWeight.BOLD, 28));
         flash.setFill(Color.GOLD);
         flash.setStroke(Color.WHITE);
         flash.setStrokeWidth(1);
-        flash.setTranslateX(8);
-        flash.setTranslateY(280);
+        flash.setTranslateX(getAppWidth() / 2 - 60);
+        flash.setTranslateY(getAppHeight() * 0.62);
         
         Glow glow = new Glow(0.8);
         flash.setEffect(glow);
@@ -582,7 +583,7 @@ public class DeltaBladeApp extends GameApplication {
             clearText.setFont(Font.font("Monospace", 32));
             clearText.setFill(Color.LIME);
             clearText.setTranslateX(getAppWidth() / 2 - 100);
-            clearText.setTranslateY(getAppHeight() / 2);
+            clearText.setTranslateY(getAppHeight() * 0.60);
             
             getGameScene().addUINode(clearText);
             
@@ -855,27 +856,33 @@ public class DeltaBladeApp extends GameApplication {
             
             shineStripe.setVisible(true);
             
-            TranslateTransition shine = new TranslateTransition(Duration.seconds(1.5), shineStripe);
+            TranslateTransition shine = new TranslateTransition(Duration.seconds(2.0), shineStripe);
             shine.setFromX(-20);
             shine.setToX(20);
             shine.setCycleCount(Animation.INDEFINITE);
-            shine.setDelay(Duration.millis(idx * 200));
+            shine.setDelay(Duration.millis(idx * 300));
             shine.play();
             extraLetterAnimations.add(shine);
             
-            Rotate rotate = new Rotate(0, 0, 0, 0, Rotate.Y_AXIS);
             letterText.getTransforms().clear();
-            letterText.getTransforms().add(rotate);
+            Scale pulseScale = new Scale(1, 1, 0, 0);
+            letterText.getTransforms().add(pulseScale);
             
-            Timeline rotateTimeline = new Timeline(
-                new KeyFrame(Duration.ZERO, new KeyValue(rotate.angleProperty(), -15)),
-                new KeyFrame(Duration.seconds(1.5), new KeyValue(rotate.angleProperty(), 15)),
-                new KeyFrame(Duration.seconds(3), new KeyValue(rotate.angleProperty(), -15))
+            Timeline pulseTimeline = new Timeline(
+                new KeyFrame(Duration.ZERO, 
+                    new KeyValue(pulseScale.xProperty(), 1.0),
+                    new KeyValue(pulseScale.yProperty(), 1.0)),
+                new KeyFrame(Duration.seconds(0.8), 
+                    new KeyValue(pulseScale.xProperty(), 1.12),
+                    new KeyValue(pulseScale.yProperty(), 1.12)),
+                new KeyFrame(Duration.seconds(1.6), 
+                    new KeyValue(pulseScale.xProperty(), 1.0),
+                    new KeyValue(pulseScale.yProperty(), 1.0))
             );
-            rotateTimeline.setCycleCount(Animation.INDEFINITE);
-            rotateTimeline.setDelay(Duration.millis(idx * 150));
-            rotateTimeline.play();
-            extraLetterAnimations.add(rotateTimeline);
+            pulseTimeline.setCycleCount(Animation.INDEFINITE);
+            pulseTimeline.setDelay(Duration.millis(idx * 150));
+            pulseTimeline.play();
+            extraLetterAnimations.add(pulseTimeline);
             
             Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(litColor.darker());

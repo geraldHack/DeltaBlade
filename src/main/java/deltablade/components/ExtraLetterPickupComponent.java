@@ -4,47 +4,49 @@ import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.component.Component;
 import deltablade.GameVars;
 import javafx.scene.Group;
-import javafx.scene.Node;
 import javafx.scene.text.Text;
 
 public class ExtraLetterPickupComponent extends Component {
     
     private final char letter;
     private final int letterIndex;
+    private final Text letterText;
+    private final Group flipWrapper;
     private double speed = 65;
+    private double pulsePhase = 0;
     private double flipPhase = 0;
-    private Text letterText;
     
-    private static final double MIN_SCALE_X = 0.18;
-    
-    public ExtraLetterPickupComponent(char letter, int letterIndex) {
+    public ExtraLetterPickupComponent(char letter, int letterIndex, Text letterText) {
         this.letter = letter;
         this.letterIndex = letterIndex;
+        this.letterText = letterText;
+        this.flipWrapper = letterText != null ? new Group(letterText) : null;
+    }
+    
+    public Group getFlipWrapper() {
+        return flipWrapper;
     }
     
     @Override
     public void onAdded() {
-        Node view = entity.getViewComponent().getChildren().get(0);
-        if (view instanceof Group group) {
-            for (Node child : group.getChildren()) {
-                if (child instanceof Text t) {
-                    letterText = t;
-                    break;
-                }
-            }
-        }
     }
     
     @Override
     public void onUpdate(double tpf) {
         entity.translateY(speed * tpf);
         
-        flipPhase += tpf * 4.0;
-        double rawScale = Math.cos(flipPhase);
-        double clampedScale = Math.signum(rawScale) * Math.max(Math.abs(rawScale), MIN_SCALE_X);
+        pulsePhase += tpf * 4;
+        double scale = 1 + Math.sin(pulsePhase) * 0.12;
+        entity.setScaleX(scale);
+        entity.setScaleY(scale);
         
-        if (letterText != null) {
-            letterText.setScaleX(clampedScale);
+        if (flipWrapper != null) {
+            flipPhase += tpf * 2.5;
+            double scaleX = Math.cos(flipPhase);
+            if (Math.abs(scaleX) < 0.18) {
+                scaleX = scaleX < 0 ? -0.18 : 0.18;
+            }
+            flipWrapper.setScaleX(scaleX);
         }
         
         double playableLeft = GameVars.RAIL_WIDTH;
@@ -56,7 +58,7 @@ public class ExtraLetterPickupComponent extends Component {
             entity.setX(playableRight - 16);
         }
         
-        if (entity.getY() > FXGL.getAppHeight() + 40) {
+        if (entity.getY() > FXGL.getAppHeight() + 20) {
             entity.removeFromWorld();
         }
     }

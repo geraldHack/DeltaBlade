@@ -13,16 +13,12 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
-import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.effect.Bloom;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
 import javafx.scene.input.KeyCode;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
@@ -58,6 +54,7 @@ public class DeltaBladeApp extends GameApplication {
     
     private List<Node> titleScreenNodes = new ArrayList<>();
     private List<Animation> extraLetterAnimations = new ArrayList<>();
+    private List<Node> activeBanners = new ArrayList<>();
     
     @Override
     protected void initSettings(GameSettings settings) {
@@ -192,6 +189,8 @@ public class DeltaBladeApp extends GameApplication {
     private void showTitleScreen() {
         titleScreenNodes.clear();
         
+        String preloadError = EmbeddedTextures.preloadAll();
+        
         Rectangle overlay = new Rectangle(getAppWidth(), getAppHeight());
         overlay.setFill(Color.rgb(0, 0, 0, 0.85));
         
@@ -275,6 +274,48 @@ public class DeltaBladeApp extends GameApplication {
         for (Node node : titleScreenNodes) {
             getGameScene().addUINode(node);
         }
+        
+        if (preloadError != null) {
+            showBanner(preloadError, Color.RED);
+        }
+    }
+    
+    /**
+     * Show a high-contrast full-width banner at the top of the screen.
+     * Visible over title screen and during gameplay.
+     */
+    private void showBanner(String message, Color textColor) {
+        showBanner(message, textColor, 2.0);
+    }
+    
+    private void showBanner(String message, Color textColor, double durationSeconds) {
+        Rectangle bar = new Rectangle(getAppWidth(), 40);
+        bar.setFill(Color.rgb(20, 20, 20, 0.95));
+        bar.setStroke(textColor);
+        bar.setStrokeWidth(2);
+        bar.setTranslateX(0);
+        bar.setTranslateY(40);
+        
+        Text text = new Text(message);
+        text.setFont(Font.font("Monospace", FontWeight.BOLD, 24));
+        text.setFill(textColor);
+        text.setStroke(Color.BLACK);
+        text.setStrokeWidth(1);
+        
+        double textWidth = text.getLayoutBounds().getWidth();
+        text.setTranslateX((getAppWidth() - textWidth) / 2);
+        text.setTranslateY(68);
+        
+        Group banner = new Group(bar, text);
+        banner.setViewOrder(-1000);
+        
+        activeBanners.add(banner);
+        getGameScene().addUINode(banner);
+        
+        runOnce(() -> {
+            getGameScene().removeUINode(banner);
+            activeBanners.remove(banner);
+        }, Duration.seconds(durationSeconds));
     }
     
     private void hideTitleScreen() {
@@ -345,15 +386,7 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void showWaveAnnouncement() {
-        Text waveText = new Text("WAVE " + geti(GameVars.LEVEL));
-        waveText.setFont(Font.font("Monospace", 36));
-        waveText.setFill(Color.YELLOW);
-        waveText.setTranslateX(getAppWidth() / 2 - 80);
-        waveText.setTranslateY(getAppHeight() * 0.58);
-        
-        getGameScene().addUINode(waveText);
-        
-        runOnce(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
+        showBanner("WAVE " + geti(GameVars.LEVEL), Color.YELLOW, 2.0);
     }
     
     private static final double BULLET_SPEED = -500;
@@ -534,19 +567,7 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void showExtraLifeFlash() {
-        Text flash = new Text("+1 LIFE!");
-        flash.setFont(Font.font("Monospace", FontWeight.BOLD, 28));
-        flash.setFill(Color.GOLD);
-        flash.setStroke(Color.WHITE);
-        flash.setStrokeWidth(1);
-        flash.setTranslateX(getAppWidth() / 2 - 60);
-        flash.setTranslateY(getAppHeight() * 0.62);
-        
-        Glow glow = new Glow(0.8);
-        flash.setEffect(glow);
-        
-        getGameScene().addUINode(flash);
-        runOnce(() -> getGameScene().removeUINode(flash), Duration.seconds(1.5));
+        showBanner("+1 LIFE!", Color.GOLD, 1.5);
     }
     
     private void applyPickup(PickupComponent.PickupType type) {
@@ -575,16 +596,9 @@ public class DeltaBladeApp extends GameApplication {
             
             inc(GameVars.MONEY, GameVars.WAVE_CLEAR_MONEY + geti(GameVars.LEVEL) * 10);
             
-            Text clearText = new Text("WAVE CLEAR!");
-            clearText.setFont(Font.font("Monospace", 32));
-            clearText.setFill(Color.LIME);
-            clearText.setTranslateX(getAppWidth() / 2 - 100);
-            clearText.setTranslateY(getAppHeight() * 0.60);
-            
-            getGameScene().addUINode(clearText);
+            showBanner("WAVE CLEAR!", Color.LIME, 2.0);
             
             runOnce(() -> {
-                getGameScene().removeUINode(clearText);
                 inc(GameVars.LEVEL, 1);
                 startWave();
             }, Duration.seconds(2));
@@ -669,6 +683,7 @@ public class DeltaBladeApp extends GameApplication {
     
     private Group[] extraLetterGroups = new Group[5];
     private Text[] extraLetterTexts = new Text[5];
+    private Group[] extraFlipWrappers = new Group[5];
     private Rectangle ammoBar;
     private Rectangle weaponBar;
     private Rectangle livesBar;
@@ -808,62 +823,56 @@ public class DeltaBladeApp extends GameApplication {
         letterText.setTranslateY(0);
         extraLetterTexts[index] = letterText;
         
-        Rectangle clipRect = new Rectangle(24, 24);
-        clipRect.setArcWidth(4);
-        clipRect.setArcHeight(4);
-        clipRect.setTranslateX(-12);
-        clipRect.setTranslateY(-18);
+        Group flipWrapper = new Group(letterText);
+        extraFlipWrappers[index] = flipWrapper;
         
-        Group contentGroup = new Group(frame, letterText);
-        contentGroup.setClip(clipRect);
-        
-        Group letterGroup = new Group(contentGroup);
+        Group letterGroup = new Group(frame, flipWrapper);
         letterGroup.setTranslateX(x);
         letterGroup.setTranslateY(y);
+        
+        startIdleFlipAnimation(index);
         
         return letterGroup;
     }
     
-    private static final double MIN_FLIP_SCALE = 0.18;
+    private void startIdleFlipAnimation(int index) {
+        Group flipWrapper = extraFlipWrappers[index];
+        if (flipWrapper == null) return;
+        
+        double cycleDuration = 2.5 + index * 0.3;
+        
+        Timeline flipTimeline = new Timeline(
+            new KeyFrame(Duration.ZERO, 
+                new KeyValue(flipWrapper.scaleXProperty(), 1.0)),
+            new KeyFrame(Duration.seconds(cycleDuration * 0.25), 
+                new KeyValue(flipWrapper.scaleXProperty(), 0.18)),
+            new KeyFrame(Duration.seconds(cycleDuration * 0.5), 
+                new KeyValue(flipWrapper.scaleXProperty(), -1.0)),
+            new KeyFrame(Duration.seconds(cycleDuration * 0.75), 
+                new KeyValue(flipWrapper.scaleXProperty(), -0.18)),
+            new KeyFrame(Duration.seconds(cycleDuration), 
+                new KeyValue(flipWrapper.scaleXProperty(), 1.0))
+        );
+        flipTimeline.setCycleCount(Animation.INDEFINITE);
+        flipTimeline.setDelay(Duration.millis(index * 400));
+        flipTimeline.play();
+        extraLetterAnimations.add(flipTimeline);
+    }
     
     private void updateExtraLetter(int idx, boolean lit, Color litColor) {
         Text letterText = extraLetterTexts[idx];
         Group letterGroup = extraLetterGroups[idx];
-        Group contentGroup = (Group) letterGroup.getChildren().get(0);
-        Rectangle frame = (Rectangle) contentGroup.getChildren().get(0);
         
         if (lit) {
             letterText.setFill(litColor);
             
-            letterText.getTransforms().clear();
-            letterText.setScaleX(1.0);
-            
-            Timeline flipTimeline = new Timeline();
-            double cycleDuration = 1.2 + idx * 0.1;
-            int steps = 60;
-            for (int i = 0; i <= steps; i++) {
-                double t = (double) i / steps;
-                double angle = t * 2 * Math.PI;
-                double rawScale = Math.cos(angle);
-                double clampedScale = Math.signum(rawScale) * Math.max(Math.abs(rawScale), MIN_FLIP_SCALE);
-                flipTimeline.getKeyFrames().add(
-                    new KeyFrame(Duration.seconds(cycleDuration * t), 
-                        new KeyValue(letterText.scaleXProperty(), clampedScale))
-                );
-            }
-            flipTimeline.setCycleCount(Animation.INDEFINITE);
-            flipTimeline.setDelay(Duration.millis(idx * 150));
-            flipTimeline.play();
-            extraLetterAnimations.add(flipTimeline);
-            
+            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(litColor.darker());
             
         } else {
             letterText.setFill(Color.rgb(45, 50, 60));
-            letterText.setEffect(null);
-            letterText.getTransforms().clear();
-            letterText.setScaleX(1.0);
             
+            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(Color.rgb(60, 70, 90));
         }
     }

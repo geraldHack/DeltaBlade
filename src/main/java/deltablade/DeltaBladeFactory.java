@@ -12,6 +12,8 @@ import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
@@ -25,177 +27,35 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 
-import java.io.File;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 public class DeltaBladeFactory implements EntityFactory {
 
     private static final int SHIP_SIZE = 48;
     private static final int BULLET_W = 12;
     private static final int BULLET_H = 20;
     private static final int PICKUP_SIZE = 28;
-    
-    private static final ConcurrentHashMap<String, Image> imageCache = new ConcurrentHashMap<>();
-    private static final Set<String> failedSprites = ConcurrentHashMap.newKeySet();
-    private static volatile boolean errorBannerShown = false;
-    
-    private static final String[] TEXTURE_PATHS = {
-        "assets/textures/",
-        "/assets/textures/",
-        "textures/",
-        "/textures/"
-    };
-    
-    private static final String[] FILE_FALLBACKS = {
-        "src/main/resources/assets/textures/",
-        "target/classes/assets/textures/"
-    };
 
-    private static Image loadImage(String filename) {
-        if (imageCache.containsKey(filename)) {
-            return imageCache.get(filename);
-        }
-        
-        Image img = null;
-        
-        for (String basePath : TEXTURE_PATHS) {
-            String resourcePath = basePath + filename;
-            
-            try {
-                ClassLoader contextCL = Thread.currentThread().getContextClassLoader();
-                if (contextCL != null) {
-                    URL url = contextCL.getResource(resourcePath);
-                    if (url != null) {
-                        img = new Image(url.toExternalForm(), false);
-                        if (!img.isError() && img.getWidth() > 0) {
-                            imageCache.put(filename, img);
-                            return img;
-                        }
-                    }
-                    
-                    InputStream is = contextCL.getResourceAsStream(resourcePath);
-                    if (is != null) {
-                        img = new Image(is);
-                        is.close();
-                        if (!img.isError() && img.getWidth() > 0) {
-                            imageCache.put(filename, img);
-                            return img;
-                        }
-                    }
-                }
-            } catch (Exception ignored) {}
-            
-            try {
-                ClassLoader classCL = DeltaBladeFactory.class.getClassLoader();
-                if (classCL != null) {
-                    URL url = classCL.getResource(resourcePath);
-                    if (url != null) {
-                        img = new Image(url.toExternalForm(), false);
-                        if (!img.isError() && img.getWidth() > 0) {
-                            imageCache.put(filename, img);
-                            return img;
-                        }
-                    }
-                }
-            } catch (Exception ignored) {}
-            
-            try {
-                URL url = DeltaBladeFactory.class.getResource("/" + resourcePath.replaceFirst("^/", ""));
-                if (url != null) {
-                    img = new Image(url.toExternalForm(), false);
-                    if (!img.isError() && img.getWidth() > 0) {
-                        imageCache.put(filename, img);
-                        return img;
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
-        
-        String userDir = System.getProperty("user.dir", ".");
-        for (String fallbackPath : FILE_FALLBACKS) {
-            try {
-                File file = new File(userDir, fallbackPath + filename);
-                if (file.exists() && file.canRead()) {
-                    img = new Image(file.toURI().toString(), false);
-                    if (!img.isError() && img.getWidth() > 0) {
-                        imageCache.put(filename, img);
-                        return img;
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
-        
-        try {
-            img = FXGL.getAssetLoader().loadImage(filename);
-            if (img != null && !img.isError() && img.getWidth() > 0) {
-                boolean isMagentaPlaceholder = img.getWidth() == 64 && img.getHeight() == 64;
-                if (!isMagentaPlaceholder) {
-                    imageCache.put(filename, img);
-                    return img;
-                }
-            }
-        } catch (Exception ignored) {}
-        
-        return null;
-    }
-    
-    private static void showSpriteErrorBanner(String filename) {
-        if (!failedSprites.add(filename)) {
-            return;
-        }
-        
-        if (!errorBannerShown) {
-            errorBannerShown = true;
-            try {
-                javafx.application.Platform.runLater(() -> {
-                    try {
-                        String message = "Sprite nicht geladen: " + String.join(", ", failedSprites);
-                        FXGL.getNotificationService().pushNotification(message);
-                    } catch (Exception e) {
-                        Text errorText = new Text("Sprites fehlen: " + String.join(", ", failedSprites));
-                        errorText.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
-                        errorText.setFill(Color.ORANGERED);
-                        errorText.setTranslateX(FXGL.getAppWidth() / 2 - 120);
-                        errorText.setTranslateY(50);
-                        FXGL.getGameScene().addUINode(errorText);
-                        FXGL.runOnce(() -> FXGL.getGameScene().removeUINode(errorText), 
-                                    javafx.util.Duration.seconds(5));
-                    }
-                });
-            } catch (Exception ignored) {}
-        }
-    }
-    
-    private static Node loadSprite(String filename, int w, int h, Color fallbackColor) {
-        Image img = loadImage(filename);
-        
+    /**
+     * Load a texture from embedded bytes first (guaranteed to work).
+     * Falls back to a triangle polygon if name is missing from embed.
+     * NEVER returns a Rectangle - squares are the visual bug indicator.
+     */
+    private static Node safeTexture(String name, int w, int h, Color fallback) {
+        Image img = EmbeddedTextures.getImage(name, w, h);
         if (img != null && !img.isError()) {
             ImageView view = new ImageView(img);
             view.setFitWidth(w);
             view.setFitHeight(h);
             view.setSmooth(false);
-            view.setPreserveRatio(false);
             return view;
         }
-        
-        showSpriteErrorBanner(filename);
-        
-        Rectangle marker = new Rectangle(w * 0.6, h * 0.6, fallbackColor.deriveColor(0, 0.5, 0.7, 0.8));
-        marker.setStroke(fallbackColor.darker());
-        marker.setStrokeWidth(1);
-        marker.setTranslateX(w * 0.2);
-        marker.setTranslateY(h * 0.2);
-        return marker;
+        return EmbeddedTextures.createFallbackShip(w, fallback);
     }
 
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER)
-                .viewWithBBox(loadSprite("player.png", SHIP_SIZE, SHIP_SIZE, Color.DODGERBLUE))
+                .viewWithBBox(safeTexture("player.png", SHIP_SIZE, SHIP_SIZE, Color.DODGERBLUE))
                 .zIndex(100)
                 .collidable()
                 .with(new PlayerComponent())
@@ -219,7 +79,7 @@ public class DeltaBladeFactory implements EntityFactory {
             default -> Color.CRIMSON;
         };
 
-        Node view = loadSprite(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
+        Node view = safeTexture(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
 
         EnemyComponent enemyComponent = new EnemyComponent(type, level);
 
@@ -247,7 +107,7 @@ public class DeltaBladeFactory implements EntityFactory {
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER_BULLET)
-                .viewWithBBox(loadSprite("bullet_player.png", BULLET_W, BULLET_H, Color.YELLOW))
+                .viewWithBBox(safeTexture("bullet_player.png", BULLET_W, BULLET_H, Color.YELLOW))
                 .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(speedX, speedY, true))
@@ -258,7 +118,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newEnemyBullet(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY_BULLET)
-                .viewWithBBox(loadSprite("bullet_enemy.png", 10, 16, Color.ORANGERED))
+                .viewWithBBox(safeTexture("bullet_enemy.png", 10, 16, Color.ORANGERED))
                 .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(250, false))
@@ -269,7 +129,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newWeaponPickup(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(loadSprite("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD))
+                .viewWithBBox(safeTexture("pickup_weapon.png", PICKUP_SIZE, PICKUP_SIZE, Color.GOLD))
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.WEAPON_UPGRADE))
@@ -280,7 +140,7 @@ public class DeltaBladeFactory implements EntityFactory {
     public Entity newAmmoPickup(SpawnData data) {
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(loadSprite("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
+                .viewWithBBox(safeTexture("pickup_ammo.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
@@ -313,27 +173,38 @@ public class DeltaBladeFactory implements EntityFactory {
         
         Circle orb = new Circle(16);
         orb.setFill(gradient);
-        orb.setStroke(orbColor.darker());
-        orb.setStrokeWidth(1.5);
+        orb.setStroke(Color.WHITE);
+        orb.setStrokeWidth(2);
+        
+        Glow orbGlow = new Glow(0.7);
+        DropShadow orbShadow = new DropShadow(12, orbColor);
+        orbGlow.setInput(orbShadow);
+        orb.setEffect(orbGlow);
         
         Text letterText = new Text(String.valueOf(letter));
         letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
         letterText.setFill(Color.WHITE);
+        letterText.setStroke(Color.rgb(0, 0, 0, 0.5));
+        letterText.setStrokeWidth(1);
         letterText.setTranslateX(-6);
         letterText.setTranslateY(6);
         
-        Circle clipCircle = new Circle(15);
-        Group contentGroup = new Group(orb, letterText);
-        contentGroup.setClip(clipCircle);
+        DropShadow letterShadow = new DropShadow(3, Color.BLACK);
+        Glow letterGlow = new Glow(0.4);
+        letterGlow.setInput(letterShadow);
+        letterText.setEffect(letterGlow);
         
-        Group group = new Group(contentGroup);
+        ExtraLetterPickupComponent component = new ExtraLetterPickupComponent(letter, letterIndex, letterText);
+        Group flipWrapper = component.getFlipWrapper();
+        
+        Group group = new Group(orb, flipWrapper != null ? flipWrapper : letterText);
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.EXTRA_LETTER_PICKUP)
                 .viewWithBBox(group)
                 .zIndex(65)
                 .collidable()
-                .with(new ExtraLetterPickupComponent(letter, letterIndex))
+                .with(component)
                 .build();
     }
 

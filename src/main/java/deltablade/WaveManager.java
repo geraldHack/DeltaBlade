@@ -5,8 +5,11 @@ import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import deltablade.components.EnemyComponent;
 import javafx.geometry.Point2D;
+import javafx.scene.Group;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 
 import java.util.ArrayList;
@@ -210,15 +213,32 @@ public class WaveManager {
     }
     
     private void showComboBonus(int bonus) {
-        Text bonusText = new Text("SQUAD COMBO! +" + bonus);
-        bonusText.setFont(Font.font("Monospace", 24));
-        bonusText.setFill(Color.GOLD);
-        bonusText.setTranslateX(getAppWidth() / 2 - 100);
-        bonusText.setTranslateY(getAppHeight() * 0.58);
+        String message = "SQUAD COMBO! +" + bonus;
+        Color textColor = Color.GOLD;
         
-        getGameScene().addUINode(bonusText);
+        Rectangle bar = new Rectangle(getAppWidth(), 40);
+        bar.setFill(Color.rgb(20, 20, 20, 0.95));
+        bar.setStroke(textColor);
+        bar.setStrokeWidth(2);
+        bar.setTranslateX(0);
+        bar.setTranslateY(85);
         
-        runOnce(() -> getGameScene().removeUINode(bonusText), javafx.util.Duration.seconds(1.5));
+        Text text = new Text(message);
+        text.setFont(Font.font("Monospace", FontWeight.BOLD, 24));
+        text.setFill(textColor);
+        text.setStroke(Color.BLACK);
+        text.setStrokeWidth(1);
+        
+        double textWidth = text.getLayoutBounds().getWidth();
+        text.setTranslateX((getAppWidth() - textWidth) / 2);
+        text.setTranslateY(113);
+        
+        Group banner = new Group(bar, text);
+        banner.setViewOrder(-1000);
+        
+        getGameScene().addUINode(banner);
+        
+        runOnce(() -> getGameScene().removeUINode(banner), javafx.util.Duration.seconds(1.5));
     }
     
     public void onEnemyDestroyed(int squadId, boolean wasEntering) {

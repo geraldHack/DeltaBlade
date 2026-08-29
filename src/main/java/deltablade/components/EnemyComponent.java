@@ -183,6 +183,7 @@ public class EnemyComponent extends Component {
         entity.translateY(diveSpeed * tpf);
         
         if (entity.getY() > FXGL.getAppHeight()) {
+            FXGL.<deltablade.DeltaBladeApp>getAppCast().onEnemyLeftScreen(squadId);
             entity.removeFromWorld();
         }
     }

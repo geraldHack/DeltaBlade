@@ -199,4 +199,19 @@ public class DeltaBladeFactory implements EntityFactory {
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
                 .build();
     }
+    
+    @Spawns("star")
+    public Entity newStar(SpawnData data) {
+        double size = data.get("size");
+        double opacity = data.get("opacity");
+        
+        Circle star = new Circle(size / 2);
+        star.setFill(Color.WHITE);
+        star.setOpacity(opacity);
+        
+        return FXGL.entityBuilder(data)
+                .view(star)
+                .zIndex(-100)
+                .build();
+    }
 }

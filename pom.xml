@@ -16,7 +16,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <fxgl.version>17.3</fxgl.version>
+        <fxgl.version>21.1</fxgl.version>
+        <javafx.version>21.0.2</javafx.version>
     </properties>
 
     <dependencies>
@@ -24,6 +25,27 @@
             <groupId>com.github.almasb</groupId>
             <artifactId>fxgl</artifactId>
             <version>${fxgl.version}</version>
+        </dependency>
+        <!-- Explicit JavaFX dependencies to ensure version consistency -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
+            <version>${javafx.version}</version>
         </dependency>
     </dependencies>
 
@@ -44,6 +66,12 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>deltablade.DeltaBladeApp</mainClass>
+                    <options>
+                        <!-- Fallback to software rendering if Metal causes issues on macOS -->
+                        <option>-Dprism.order=sw,es2</option>
+                        <!-- Disable Metal renderer (can cause rendering issues on some macOS systems) -->
+                        <option>-Dprism.metal=false</option>
+                    </options>
                 </configuration>
             </plugin>
             <plugin>

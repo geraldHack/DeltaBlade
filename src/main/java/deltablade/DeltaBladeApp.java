@@ -131,7 +131,12 @@ public class DeltaBladeApp extends GameApplication {
     protected void initGame() {
         getGameWorld().addEntityFactory(new DeltaBladeFactory());
         
-        getGameScene().setBackgroundColor(Color.BLACK);
+        getGameScene().getViewport().setX(0);
+        getGameScene().getViewport().setY(0);
+        
+        spawn("background", new com.almasb.fxgl.entity.SpawnData(0, 0)
+                .put("width", getAppWidth())
+                .put("height", getAppHeight()));
         
         spawnStars();
         

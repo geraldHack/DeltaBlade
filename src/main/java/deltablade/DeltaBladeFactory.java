@@ -44,6 +44,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .viewWithBBox(shipBody)
                 .view(cockpit)
                 .view(engine)
+                .zIndex(100)
                 .collidable()
                 .with(new PlayerComponent())
                 .build();
@@ -105,6 +106,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .type(EntityType.ENEMY)
                 .viewWithBBox(body)
                 .view(eye)
+                .zIndex(50)
                 .collidable()
                 .with(enemyComponent)
                 .build();
@@ -124,6 +126,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .type(EntityType.PLAYER_BULLET)
                 .viewWithBBox(bullet)
                 .view(glow)
+                .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(-500, true))
                 .build();
@@ -141,6 +144,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .type(EntityType.ENEMY_BULLET)
                 .viewWithBBox(bullet)
                 .view(core)
+                .zIndex(75)
                 .collidable()
                 .with(new BulletComponent(250, false))
                 .build();
@@ -168,6 +172,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .type(EntityType.PICKUP)
                 .viewWithBBox(box)
                 .view(arrow)
+                .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.WEAPON_UPGRADE))
                 .build();
@@ -195,6 +200,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 .viewWithBBox(circle)
                 .view(plus1)
                 .view(plus2)
+                .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
                 .build();
@@ -210,8 +216,23 @@ public class DeltaBladeFactory implements EntityFactory {
         star.setOpacity(opacity);
         
         return FXGL.entityBuilder(data)
-                .view(star)
+                .viewWithBBox(star)
                 .zIndex(-100)
+                .build();
+    }
+    
+    @Spawns("background")
+    public Entity newBackground(SpawnData data) {
+        int width = data.get("width");
+        int height = data.get("height");
+        
+        Rectangle bg = new Rectangle(width, height);
+        bg.setFill(Color.BLACK);
+        
+        return FXGL.entityBuilder(data)
+                .at(0, 0)
+                .viewWithBBox(bg)
+                .zIndex(-1000)
                 .build();
     }
 }

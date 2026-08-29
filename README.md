@@ -3,7 +3,7 @@
 **Original arcade shooter game** inspired by classic space shooters like Galaga. Built with Java 21 and [FXGL](https://github.com/AlmasB/FXGL) game engine.
 
 ![Java](https://img.shields.io/badge/Java-21-orange)
-![FXGL](https://img.shields.io/badge/FXGL-17.3-blue)
+![FXGL](https://img.shields.io/badge/FXGL-21.1-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -17,6 +17,11 @@
 ### How to Run
 ```bash
 mvn javafx:run
+```
+
+The game automatically disables Metal rendering on macOS for compatibility. If you still experience rendering issues, you can try:
+```bash
+mvn javafx:run -Djavafx.options="-Dprism.order=sw"
 ```
 
 Or alternatively:
@@ -67,6 +72,11 @@ mvn compile exec:java
 mvn javafx:run
 ```
 
+Das Spiel deaktiviert automatisch Metal-Rendering auf macOS für bessere Kompatibilität. Bei Rendering-Problemen:
+```bash
+mvn javafx:run -Djavafx.options="-Dprism.order=sw"
+```
+
 Oder alternativ:
 ```bash
 mvn compile exec:java
@@ -108,7 +118,7 @@ mvn compile exec:java
 
 ```
 DeltaBlade/
-├── pom.xml                              # Maven build configuration (FXGL 17.3)
+├── pom.xml                              # Maven build configuration (FXGL 21.1)
 ├── src/main/java/deltablade/
 │   ├── DeltaBladeApp.java               # Main FXGL GameApplication
 │   ├── DeltaBladeFactory.java           # Entity factory (spawning)

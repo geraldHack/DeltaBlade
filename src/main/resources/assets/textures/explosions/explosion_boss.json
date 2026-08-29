@@ -1,0 +1,9 @@
+{
+  "name": "boss",
+  "frameWidth": 96,
+  "frameHeight": 96,
+  "frameCount": 14,
+  "fps": 14.00,
+  "columns": 8,
+  "rows": 2
+}

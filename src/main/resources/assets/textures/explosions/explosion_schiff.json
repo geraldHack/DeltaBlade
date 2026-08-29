@@ -1,0 +1,9 @@
+{
+  "name": "schiff",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "frameCount": 8,
+  "fps": 16.00,
+  "columns": 8,
+  "rows": 1
+}

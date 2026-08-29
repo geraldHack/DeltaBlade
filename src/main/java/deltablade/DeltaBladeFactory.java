@@ -7,6 +7,7 @@ import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.Spawns;
 import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
+import deltablade.components.ExplosionComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
@@ -262,6 +263,45 @@ public class DeltaBladeFactory implements EntityFactory {
                 .at(0, 0)
                 .view(bg)
                 .zIndex(-1000)
+                .build();
+    }
+
+    /**
+     * Spawns an explosion effect at the given position.
+     * Data keys:
+     *   - "size": String - "hit" (small), "ship" (medium), or "big" (boss)
+     */
+    @Spawns("explosion")
+    public Entity newExplosion(SpawnData data) {
+        String size = data.hasKey("size") ? data.<String>get("size") : "ship";
+
+        String textureName = switch (size) {
+            case "hit" -> "explosion_hit.png";
+            case "big" -> "explosion_big.png";
+            default -> "explosion_ship.png";
+        };
+
+        double duration = switch (size) {
+            case "hit" -> 0.4;
+            case "big" -> 0.8;
+            default -> 0.6;
+        };
+
+        int frameSize = 64;
+        int frameCount = 8;
+
+        Image spriteSheet = EmbeddedTextures.getImage(textureName, frameSize * frameCount, frameSize);
+        if (spriteSheet == null || spriteSheet.isError()) {
+            return FXGL.entityBuilder(data).build();
+        }
+
+        ExplosionComponent explosionComp = new ExplosionComponent(
+                spriteSheet, frameCount, frameSize, frameSize, duration);
+
+        return FXGL.entityBuilder(data)
+                .view(explosionComp.getView())
+                .zIndex(90)
+                .with(explosionComp)
                 .build();
     }
 }

@@ -92,6 +92,7 @@
                     <options>
                         <option>-Dprism.order=sw,es2</option>
                         <option>-Dprism.metal=false</option>
+                        <option>-Djava.awt.headless=true</option>
                     </options>
                 </configuration>
             </plugin>

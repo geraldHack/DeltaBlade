@@ -543,6 +543,7 @@ public class DeltaBladeApp extends GameApplication {
         if (geti(varName) == 0) {
             set(varName, 1);
             inc(GameVars.SCORE, 25);
+            showBanner(String.valueOf(letter), LETTER_COLORS[letterIndex], 1.0);
             
             if (isExtraComplete()) {
                 inc(GameVars.LIVES, 1);
@@ -577,6 +578,7 @@ public class DeltaBladeApp extends GameApplication {
                 }
                 inc(GameVars.SCORE, 50);
                 inc(GameVars.MONEY, 15);
+                showBanner("WAFFE", Color.GOLD, 1.2);
             }
             case EXTRA_AMMO -> {
                 if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
@@ -584,6 +586,7 @@ public class DeltaBladeApp extends GameApplication {
                 }
                 inc(GameVars.SCORE, 25);
                 inc(GameVars.MONEY, 10);
+                showBanner("MUNI", Color.CYAN, 1.2);
             }
             default -> {}
         }

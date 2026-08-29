@@ -2,9 +2,7 @@ package deltablade;
 
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
-import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.Entity;
-import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.input.UserAction;
 import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
@@ -28,6 +26,9 @@ public class DeltaBladeApp extends GameApplication {
     private boolean movingLeft = false;
     private boolean movingRight = false;
     private boolean gameOver = false;
+    
+    private WaveManager waveManager;
+    private boolean waveTransition = false;
     
     private static final Random random = new Random();
     
@@ -136,8 +137,10 @@ public class DeltaBladeApp extends GameApplication {
         
         addStars();
         
+        waveManager = new WaveManager();
+        
         spawnPlayer();
-        spawnWave();
+        startWave();
     }
     
     private void addStars() {
@@ -159,42 +162,23 @@ public class DeltaBladeApp extends GameApplication {
         player = spawn("player", getAppWidth() / 2 - 20, getAppHeight() - 60);
     }
     
-    private void spawnWave() {
-        int level = geti(GameVars.LEVEL);
-        int rows = 2 + level / 3;
-        int cols = Math.min(5 + level, 8);
+    private void startWave() {
+        waveTransition = false;
+        waveManager.startWave(geti(GameVars.LEVEL));
         
-        double spacingX = getAppWidth() / (cols + 1.0);
-        double spacingY = 45;
-        double startY = 60;
-        
-        int enemyCount = 0;
-        
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                double x = spacingX * (col + 1) - 15;
-                double y = startY + row * spacingY;
-                
-                EnemyComponent.EnemyType type = determineEnemyType(row, level);
-                
-                spawn("enemy", new SpawnData(x, y)
-                        .put("enemyType", type)
-                        .put("level", level));
-                enemyCount++;
-            }
-        }
-        
-        set(GameVars.ENEMIES_REMAINING, enemyCount);
+        showWaveAnnouncement();
     }
     
-    private EnemyComponent.EnemyType determineEnemyType(int row, int level) {
-        if (level >= 3 && row == 0 && random.nextDouble() < 0.3) {
-            return EnemyComponent.EnemyType.TOUGH;
-        }
-        if (level >= 2 && random.nextDouble() < 0.15 + level * 0.05) {
-            return EnemyComponent.EnemyType.FAST;
-        }
-        return EnemyComponent.EnemyType.BASIC;
+    private void showWaveAnnouncement() {
+        Text waveText = new Text("WAVE " + geti(GameVars.LEVEL));
+        waveText.setFont(Font.font("Monospace", 36));
+        waveText.setFill(Color.YELLOW);
+        waveText.setTranslateX(getAppWidth() / 2 - 80);
+        waveText.setTranslateY(getAppHeight() / 2 - 100);
+        
+        getGameScene().addUINode(waveText);
+        
+        run(() -> getGameScene().removeUINode(waveText), Duration.seconds(2));
     }
     
     private void fire() {
@@ -233,6 +217,10 @@ public class DeltaBladeApp extends GameApplication {
         spawn("enemyBullet", x - 4, y);
     }
     
+    public void onSquadMemberSettled(int squadId) {
+        waveManager.markSquadSettled(squadId);
+    }
+    
     @Override
     protected void initPhysics() {
         onCollisionBegin(EntityType.PLAYER_BULLET, EntityType.ENEMY, (bullet, enemy) -> {
@@ -245,6 +233,8 @@ public class DeltaBladeApp extends GameApplication {
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
                 inc(GameVars.ENEMIES_REMAINING, -1);
+                
+                waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
                 
                 trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
                 
@@ -312,11 +302,22 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void checkWaveComplete() {
-        if (geti(GameVars.ENEMIES_REMAINING) <= 0) {
+        if (waveManager.isWaveComplete() && !waveTransition) {
+            waveTransition = true;
+            
+            Text clearText = new Text("WAVE CLEAR!");
+            clearText.setFont(Font.font("Monospace", 32));
+            clearText.setFill(Color.LIME);
+            clearText.setTranslateX(getAppWidth() / 2 - 100);
+            clearText.setTranslateY(getAppHeight() / 2);
+            
+            getGameScene().addUINode(clearText);
+            
             run(() -> {
+                getGameScene().removeUINode(clearText);
                 inc(GameVars.LEVEL, 1);
-                spawnWave();
-            }, Duration.seconds(1.5));
+                startWave();
+            }, Duration.seconds(2));
         }
     }
     
@@ -372,6 +373,10 @@ public class DeltaBladeApp extends GameApplication {
         }
         if (movingRight) {
             pc.moveRight(tpf);
+        }
+        
+        if (waveManager != null && !waveTransition) {
+            waveManager.update(tpf);
         }
     }
     

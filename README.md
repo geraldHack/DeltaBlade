@@ -26,7 +26,7 @@ mvn compile exec:java
 
 ### How to Play
 - **Move**: Arrow keys (← →) or A/D
-- **Fire**: Space or Ctrl
+- **Fire**: Space or X
 - **Restart**: R (after Game Over)
 
 ### Game Features
@@ -74,7 +74,7 @@ mvn compile exec:java
 
 ### Steuerung
 - **Bewegen**: Pfeiltasten (← →) oder A/D
-- **Schießen**: Leertaste oder Strg
+- **Schießen**: Leertaste oder X
 - **Neustart**: R (nach Game Over)
 
 ### Spielmechaniken

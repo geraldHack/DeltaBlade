@@ -9,12 +9,21 @@ import deltablade.components.EnemyComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
-import javafx.beans.property.IntegerProperty;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.RotateTransition;
+import javafx.animation.Timeline;
+import javafx.animation.TranslateTransition;
 import javafx.geometry.Pos;
+import javafx.scene.Group;
+import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.effect.Bloom;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
 import javafx.scene.input.KeyCode;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
@@ -24,8 +33,11 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
+import javafx.scene.transform.Rotate;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -37,11 +49,18 @@ public class DeltaBladeApp extends GameApplication {
     private boolean movingLeft = false;
     private boolean movingRight = false;
     private boolean gameOver = false;
+    private boolean showingTitleScreen = true;
+    private boolean gameStarted = false;
     
     private WaveManager waveManager;
     private boolean waveTransition = false;
     
     private static final Random random = new Random();
+    private int frameCount = 0;
+    private static final int WARMUP_FRAMES = 5;
+    
+    private List<Node> titleScreenNodes = new ArrayList<>();
+    private List<Animation> extraLetterAnimations = new ArrayList<>();
     
     @Override
     protected void initSettings(GameSettings settings) {
@@ -152,8 +171,11 @@ public class DeltaBladeApp extends GameApplication {
         movingLeft = false;
         movingRight = false;
         waveTransition = false;
+        showingTitleScreen = true;
+        gameStarted = false;
         player = null;
         waveManager = null;
+        frameCount = 0;
         
         getGameWorld().addEntityFactory(new DeltaBladeFactory());
         
@@ -167,10 +189,129 @@ public class DeltaBladeApp extends GameApplication {
         spawnStars();
         spawnSideRails();
         
-        waveManager = new WaveManager();
+        showTitleScreen();
+    }
+    
+    private void showTitleScreen() {
+        titleScreenNodes.clear();
         
+        Rectangle overlay = new Rectangle(getAppWidth(), getAppHeight());
+        overlay.setFill(Color.rgb(0, 0, 0, 0.85));
+        
+        Text title = new Text("DELTABLADE");
+        title.setFont(Font.font("Monospace", FontWeight.BOLD, 56));
+        title.setFill(Color.CYAN);
+        title.setStroke(Color.WHITE);
+        title.setStrokeWidth(2);
+        
+        DropShadow titleGlow = new DropShadow(20, Color.CYAN);
+        Glow glow = new Glow(0.6);
+        glow.setInput(titleGlow);
+        title.setEffect(glow);
+        
+        title.setTranslateX(getAppWidth() / 2 - 200);
+        title.setTranslateY(180);
+        
+        Text subtitle = new Text("- ARCADE SHOOTER -");
+        subtitle.setFont(Font.font("Monospace", 16));
+        subtitle.setFill(Color.LIGHTGRAY);
+        subtitle.setTranslateX(getAppWidth() / 2 - 90);
+        subtitle.setTranslateY(220);
+        
+        Button startButton = new Button("START GAME");
+        startButton.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
+        startButton.setStyle(
+            "-fx-background-color: linear-gradient(to bottom, #2a5298, #1e3c72);" +
+            "-fx-text-fill: white;" +
+            "-fx-padding: 15 40;" +
+            "-fx-background-radius: 8;" +
+            "-fx-border-color: #4a90d9;" +
+            "-fx-border-width: 2;" +
+            "-fx-border-radius: 8;" +
+            "-fx-cursor: hand;"
+        );
+        startButton.setTranslateX(getAppWidth() / 2 - 85);
+        startButton.setTranslateY(320);
+        
+        startButton.setOnMouseEntered(e -> startButton.setStyle(
+            "-fx-background-color: linear-gradient(to bottom, #3a6ab8, #2e4c82);" +
+            "-fx-text-fill: white;" +
+            "-fx-padding: 15 40;" +
+            "-fx-background-radius: 8;" +
+            "-fx-border-color: #6ab0f9;" +
+            "-fx-border-width: 2;" +
+            "-fx-border-radius: 8;" +
+            "-fx-cursor: hand;"
+        ));
+        startButton.setOnMouseExited(e -> startButton.setStyle(
+            "-fx-background-color: linear-gradient(to bottom, #2a5298, #1e3c72);" +
+            "-fx-text-fill: white;" +
+            "-fx-padding: 15 40;" +
+            "-fx-background-radius: 8;" +
+            "-fx-border-color: #4a90d9;" +
+            "-fx-border-width: 2;" +
+            "-fx-border-radius: 8;" +
+            "-fx-cursor: hand;"
+        ));
+        
+        startButton.setOnAction(e -> startActualGame());
+        
+        Text controls = new Text("Controls: Arrow Keys / A,D = Move | Space / X = Fire");
+        controls.setFont(Font.font("Monospace", 12));
+        controls.setFill(Color.GRAY);
+        controls.setTranslateX(getAppWidth() / 2 - 200);
+        controls.setTranslateY(450);
+        
+        Text extraInfo = new Text("Collect E-X-T-R-A letters for extra life!");
+        extraInfo.setFont(Font.font("Monospace", 12));
+        extraInfo.setFill(Color.GOLD);
+        extraInfo.setTranslateX(getAppWidth() / 2 - 140);
+        extraInfo.setTranslateY(480);
+        
+        titleScreenNodes.add(overlay);
+        titleScreenNodes.add(title);
+        titleScreenNodes.add(subtitle);
+        titleScreenNodes.add(startButton);
+        titleScreenNodes.add(controls);
+        titleScreenNodes.add(extraInfo);
+        
+        for (Node node : titleScreenNodes) {
+            getGameScene().addUINode(node);
+        }
+    }
+    
+    private void hideTitleScreen() {
+        for (Node node : titleScreenNodes) {
+            getGameScene().removeUINode(node);
+        }
+        titleScreenNodes.clear();
+    }
+    
+    private void startActualGame() {
+        hideTitleScreen();
+        showingTitleScreen = false;
+        gameStarted = true;
+        frameCount = 0;
+        
+        resetGameVars();
+        
+        waveManager = new WaveManager();
         spawnPlayer();
         startWave();
+    }
+    
+    private void resetGameVars() {
+        set(GameVars.SCORE, 0);
+        set(GameVars.LIVES, GameVars.INITIAL_LIVES);
+        set(GameVars.LEVEL, 1);
+        set(GameVars.WEAPON_GRADE, 1);
+        set(GameVars.AMMO_CAP, GameVars.INITIAL_AMMO_CAP);
+        set(GameVars.ACTIVE_BULLETS, 0);
+        set(GameVars.ENEMIES_REMAINING, 0);
+        set(GameVars.MONEY, 0);
+        for (String var : GameVars.EXTRA_VARS) {
+            set(var, 0);
+        }
     }
     
     private void spawnSideRails() {
@@ -222,7 +363,7 @@ public class DeltaBladeApp extends GameApplication {
     private static final double SPREAD_VX = 80;
     
     private void fire() {
-        if (player == null || gameOver) return;
+        if (player == null || gameOver || showingTitleScreen) return;
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
         int grade = geti(GameVars.WEAPON_GRADE);
@@ -491,16 +632,29 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void restartGame() {
+        stopExtraLetterAnimations();
         getGameController().startNewGame();
     }
     
-    private static final double MAX_TPF = 1.0 / 30.0;
+    private void stopExtraLetterAnimations() {
+        for (Animation anim : extraLetterAnimations) {
+            anim.stop();
+        }
+        extraLetterAnimations.clear();
+    }
+    
+    private static final double MAX_TPF = 1.0 / 45.0;
     
     @Override
     protected void onUpdate(double tpf) {
-        if (gameOver || player == null) return;
+        if (showingTitleScreen || gameOver || player == null) return;
         
-        tpf = Math.min(tpf, MAX_TPF);
+        frameCount++;
+        if (frameCount <= WARMUP_FRAMES) {
+            tpf = Math.min(tpf, 0.008);
+        } else {
+            tpf = Math.min(tpf, MAX_TPF);
+        }
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
         
@@ -516,15 +670,25 @@ public class DeltaBladeApp extends GameApplication {
         }
     }
     
+    private Group[] extraLetterGroups = new Group[5];
     private Text[] extraLetterTexts = new Text[5];
+    private Rectangle[] extraShineStripes = new Rectangle[5];
     private Rectangle ammoBar;
     private Rectangle weaponBar;
     private Rectangle livesBar;
     
+    private static final Color[] LETTER_COLORS = {
+        Color.rgb(255, 80, 80),
+        Color.rgb(80, 255, 80),
+        Color.rgb(80, 180, 255),
+        Color.rgb(255, 180, 80),
+        Color.rgb(200, 80, 255)
+    };
+    
     @Override
     protected void initUI() {
         int railWidth = GameVars.RAIL_WIDTH;
-        int xOffset = 6;
+        int xOffset = 8;
         int yStart = 12;
         
         Text moneyLabel = new Text();
@@ -538,35 +702,23 @@ public class DeltaBladeApp extends GameApplication {
         moneyLabel.setEffect(moneyShadow);
         getGameScene().addUINode(moneyLabel);
         
-        int extraY = yStart + 35;
-        Color[] letterColors = {
-            Color.rgb(255, 80, 80),
-            Color.rgb(80, 255, 80),
-            Color.rgb(80, 180, 255),
-            Color.rgb(255, 180, 80),
-            Color.rgb(200, 80, 255)
-        };
+        int extraY = yStart + 40;
+        int letterSpacing = 28;
         
         for (int i = 0; i < 5; i++) {
             char letter = GameVars.EXTRA_LETTERS[i];
-            Text letterText = new Text(String.valueOf(letter));
-            letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
-            letterText.setFill(Color.rgb(60, 60, 70));
-            letterText.setTranslateX(xOffset + 20);
-            letterText.setTranslateY(extraY + i * 22);
+            Group letterGroup = createAnimatedLetterSlot(letter, i, xOffset + 22, extraY + i * letterSpacing);
+            extraLetterGroups[i] = letterGroup;
             
-            extraLetterTexts[i] = letterText;
             final int idx = i;
-            final Color litColor = letterColors[i];
-            
             getip(GameVars.EXTRA_VARS[i]).addListener((obs, oldVal, newVal) -> {
-                updateExtraLetter(idx, newVal.intValue() > 0, litColor);
+                updateExtraLetter(idx, newVal.intValue() > 0, LETTER_COLORS[idx]);
             });
             
-            getGameScene().addUINode(letterText);
+            getGameScene().addUINode(letterGroup);
         }
         
-        int barsY = extraY + 5 * 22 + 15;
+        int barsY = extraY + 5 * letterSpacing + 10;
         int barWidth = railWidth - 14;
         int barHeight = 8;
         int barSpacing = 14;
@@ -643,17 +795,99 @@ public class DeltaBladeApp extends GameApplication {
         return bar;
     }
     
+    private Group createAnimatedLetterSlot(char letter, int index, double x, double y) {
+        Rectangle frame = new Rectangle(24, 24);
+        frame.setFill(Color.rgb(25, 30, 40));
+        frame.setStroke(Color.rgb(60, 70, 90));
+        frame.setStrokeWidth(1);
+        frame.setArcWidth(4);
+        frame.setArcHeight(4);
+        frame.setTranslateX(-12);
+        frame.setTranslateY(-18);
+        
+        Text letterText = new Text(String.valueOf(letter));
+        letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 18));
+        letterText.setFill(Color.rgb(45, 50, 60));
+        letterText.setTranslateX(-6);
+        letterText.setTranslateY(0);
+        extraLetterTexts[index] = letterText;
+        
+        Rectangle shineStripe = new Rectangle(4, 26);
+        LinearGradient shineGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+            new Stop(0, Color.TRANSPARENT),
+            new Stop(0.3, Color.rgb(255, 255, 255, 0.3)),
+            new Stop(0.5, Color.rgb(255, 255, 255, 0.7)),
+            new Stop(0.7, Color.rgb(255, 255, 255, 0.3)),
+            new Stop(1, Color.TRANSPARENT)
+        );
+        shineStripe.setFill(shineGradient);
+        shineStripe.setTranslateX(-20);
+        shineStripe.setTranslateY(-19);
+        shineStripe.setVisible(false);
+        extraShineStripes[index] = shineStripe;
+        
+        Rectangle clipRect = new Rectangle(24, 26);
+        clipRect.setTranslateX(-12);
+        clipRect.setTranslateY(-19);
+        
+        Group clipGroup = new Group(shineStripe);
+        clipGroup.setClip(clipRect);
+        
+        Group letterGroup = new Group(frame, letterText, clipGroup);
+        letterGroup.setTranslateX(x);
+        letterGroup.setTranslateY(y);
+        
+        return letterGroup;
+    }
+    
     private void updateExtraLetter(int idx, boolean lit, Color litColor) {
         Text letterText = extraLetterTexts[idx];
+        Group letterGroup = extraLetterGroups[idx];
+        Rectangle shineStripe = extraShineStripes[idx];
+        
         if (lit) {
             letterText.setFill(litColor);
-            Glow glow = new Glow(0.6);
-            DropShadow shadow = new DropShadow(6, litColor);
+            
+            Glow glow = new Glow(0.5);
+            DropShadow shadow = new DropShadow(8, litColor);
             glow.setInput(shadow);
             letterText.setEffect(glow);
+            
+            shineStripe.setVisible(true);
+            
+            TranslateTransition shine = new TranslateTransition(Duration.seconds(1.5), shineStripe);
+            shine.setFromX(-20);
+            shine.setToX(20);
+            shine.setCycleCount(Animation.INDEFINITE);
+            shine.setDelay(Duration.millis(idx * 200));
+            shine.play();
+            extraLetterAnimations.add(shine);
+            
+            Rotate rotate = new Rotate(0, 0, 0, 0, Rotate.Y_AXIS);
+            letterText.getTransforms().clear();
+            letterText.getTransforms().add(rotate);
+            
+            Timeline rotateTimeline = new Timeline(
+                new KeyFrame(Duration.ZERO, new KeyValue(rotate.angleProperty(), -15)),
+                new KeyFrame(Duration.seconds(1.5), new KeyValue(rotate.angleProperty(), 15)),
+                new KeyFrame(Duration.seconds(3), new KeyValue(rotate.angleProperty(), -15))
+            );
+            rotateTimeline.setCycleCount(Animation.INDEFINITE);
+            rotateTimeline.setDelay(Duration.millis(idx * 150));
+            rotateTimeline.play();
+            extraLetterAnimations.add(rotateTimeline);
+            
+            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
+            frame.setStroke(litColor.darker());
+            
         } else {
-            letterText.setFill(Color.rgb(60, 60, 70));
+            letterText.setFill(Color.rgb(45, 50, 60));
             letterText.setEffect(null);
+            letterText.getTransforms().clear();
+            shineStripe.setVisible(false);
+            
+            Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
+            frame.setStroke(Color.rgb(60, 70, 90));
         }
     }
     

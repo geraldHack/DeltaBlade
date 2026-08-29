@@ -24,7 +24,9 @@ public class WaveManager {
     private int enemiesSpawned = 0;
     private int squadsToSpawn = 0;
     private double squadSpawnTimer = 0;
-    private double squadSpawnDelay = 1.5;
+    private double squadSpawnDelay = 2.5;
+    private double initialDelay = 1.0;
+    private boolean initialDelayPassed = false;
     
     private static final Random random = new Random();
     
@@ -69,6 +71,7 @@ public class WaveManager {
         this.formationSlots.clear();
         this.enemiesSpawned = 0;
         this.squadSpawnTimer = 0;
+        this.initialDelayPassed = false;
         
         // Wave 1: 6 enemies, +2 per wave, max 18 (3 rows × 6 cols)
         int targetEnemies = Math.min(6 + (level - 1) * 2, 18);
@@ -99,11 +102,19 @@ public class WaveManager {
         squadsToSpawn = Math.max(squadsToSpawn, 1);
         
         set(GameVars.ENEMIES_REMAINING, totalEnemiesInWave);
-        
-        spawnNextSquad();
     }
     
     public void update(double tpf) {
+        if (!initialDelayPassed) {
+            squadSpawnTimer += tpf;
+            if (squadSpawnTimer >= initialDelay) {
+                initialDelayPassed = true;
+                squadSpawnTimer = 0;
+                spawnNextSquad();
+            }
+            return;
+        }
+        
         if (enemiesSpawned < totalEnemiesInWave && squadsToSpawn > 0) {
             squadSpawnTimer += tpf;
             if (squadSpawnTimer >= squadSpawnDelay) {
@@ -157,7 +168,7 @@ public class WaveManager {
             if (index == 0) {
                 spawnEnemy.run();
             } else {
-                runOnce(spawnEnemy, javafx.util.Duration.seconds(index * 0.15));
+                runOnce(spawnEnemy, javafx.util.Duration.seconds(index * 0.25));
             }
             
             enemiesSpawned++;

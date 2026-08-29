@@ -171,34 +171,56 @@ public class DeltaBladeFactory implements EntityFactory {
         };
         
         Color orbColor = letterColors[letterIndex % letterColors.length];
-        Color innerColor = orbColor.brighter();
+        Color innerColor = orbColor.brighter().brighter();
         
         RadialGradient gradient = new RadialGradient(
-            0, 0, 0.3, 0.3, 0.8, true, CycleMethod.NO_CYCLE,
+            0, 0, 0.25, 0.25, 0.9, true, CycleMethod.NO_CYCLE,
             new Stop(0, innerColor),
-            new Stop(0.5, orbColor),
-            new Stop(1, orbColor.darker())
+            new Stop(0.4, orbColor.brighter()),
+            new Stop(0.7, orbColor),
+            new Stop(1, orbColor.darker().darker())
         );
         
-        Circle orb = new Circle(14);
+        Circle orb = new Circle(16);
         orb.setFill(gradient);
         orb.setStroke(Color.WHITE);
         orb.setStrokeWidth(2);
         
-        Glow glow = new Glow(0.8);
-        DropShadow shadow = new DropShadow(8, orbColor);
+        Glow glow = new Glow(0.7);
+        DropShadow shadow = new DropShadow(12, orbColor);
         glow.setInput(shadow);
         orb.setEffect(glow);
         
         Text letterText = new Text(String.valueOf(letter));
-        letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        letterText.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
         letterText.setFill(Color.WHITE);
-        letterText.setStroke(Color.BLACK);
-        letterText.setStrokeWidth(0.5);
-        letterText.setTranslateX(-5);
-        letterText.setTranslateY(5);
+        letterText.setStroke(Color.rgb(0, 0, 0, 0.5));
+        letterText.setStrokeWidth(1);
+        letterText.setTranslateX(-6);
+        letterText.setTranslateY(6);
         
-        Group group = new Group(orb, letterText);
+        DropShadow letterShadow = new DropShadow(3, Color.BLACK);
+        Glow letterGlow = new Glow(0.4);
+        letterGlow.setInput(letterShadow);
+        letterText.setEffect(letterGlow);
+        
+        Rectangle shineStripe = new Rectangle(4, 36);
+        LinearGradient shineGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+            new Stop(0, Color.TRANSPARENT),
+            new Stop(0.3, Color.rgb(255, 255, 255, 0.4)),
+            new Stop(0.5, Color.rgb(255, 255, 255, 0.8)),
+            new Stop(0.7, Color.rgb(255, 255, 255, 0.4)),
+            new Stop(1, Color.TRANSPARENT)
+        );
+        shineStripe.setFill(shineGradient);
+        shineStripe.setTranslateX(-18);
+        shineStripe.setTranslateY(-18);
+        
+        Circle clipCircle = new Circle(15);
+        Group shineGroup = new Group(shineStripe);
+        shineGroup.setClip(clipCircle);
+        
+        Group group = new Group(orb, shineGroup, letterText);
         
         return FXGL.entityBuilder(data)
                 .type(EntityType.EXTRA_LETTER_PICKUP)

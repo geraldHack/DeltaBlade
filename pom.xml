@@ -61,15 +61,36 @@
                 </configuration>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-resources</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <copy todir="${project.build.outputDirectory}/assets/textures" overwrite="true">
+                                    <fileset dir="${project.basedir}/src/main/resources/assets/textures">
+                                        <include name="**/*"/>
+                                    </fileset>
+                                </copy>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>deltablade.DeltaBladeApp</mainClass>
                     <options>
-                        <!-- Fallback to software rendering if Metal causes issues on macOS -->
                         <option>-Dprism.order=sw,es2</option>
-                        <!-- Disable Metal renderer (can cause rendering issues on some macOS systems) -->
                         <option>-Dprism.metal=false</option>
                     </options>
                 </configuration>

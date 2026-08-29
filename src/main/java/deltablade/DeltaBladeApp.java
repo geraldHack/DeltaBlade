@@ -12,9 +12,7 @@ import deltablade.components.PlayerComponent;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
-import javafx.animation.RotateTransition;
 import javafx.animation.Timeline;
-import javafx.animation.TranslateTransition;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.Node;
@@ -33,8 +31,6 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
-import javafx.scene.transform.Rotate;
-import javafx.scene.transform.Scale;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
@@ -673,7 +669,6 @@ public class DeltaBladeApp extends GameApplication {
     
     private Group[] extraLetterGroups = new Group[5];
     private Text[] extraLetterTexts = new Text[5];
-    private Rectangle[] extraShineStripes = new Rectangle[5];
     private Rectangle ammoBar;
     private Rectangle weaponBar;
     private Rectangle livesBar;
@@ -813,38 +808,18 @@ public class DeltaBladeApp extends GameApplication {
         letterText.setTranslateY(0);
         extraLetterTexts[index] = letterText;
         
-        Rectangle shineStripe = new Rectangle(4, 26);
-        LinearGradient shineGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-            new Stop(0, Color.TRANSPARENT),
-            new Stop(0.3, Color.rgb(255, 255, 255, 0.3)),
-            new Stop(0.5, Color.rgb(255, 255, 255, 0.7)),
-            new Stop(0.7, Color.rgb(255, 255, 255, 0.3)),
-            new Stop(1, Color.TRANSPARENT)
-        );
-        shineStripe.setFill(shineGradient);
-        shineStripe.setTranslateX(-20);
-        shineStripe.setTranslateY(-19);
-        shineStripe.setVisible(false);
-        extraShineStripes[index] = shineStripe;
-        
-        Rectangle clipRect = new Rectangle(24, 26);
-        clipRect.setTranslateX(-12);
-        clipRect.setTranslateY(-19);
-        
-        Group clipGroup = new Group(shineStripe);
-        clipGroup.setClip(clipRect);
-        
-        Group letterGroup = new Group(frame, letterText, clipGroup);
+        Group letterGroup = new Group(frame, letterText);
         letterGroup.setTranslateX(x);
         letterGroup.setTranslateY(y);
         
         return letterGroup;
     }
     
+    private static final double MIN_FLIP_SCALE = 0.18;
+    
     private void updateExtraLetter(int idx, boolean lit, Color litColor) {
         Text letterText = extraLetterTexts[idx];
         Group letterGroup = extraLetterGroups[idx];
-        Rectangle shineStripe = extraShineStripes[idx];
         
         if (lit) {
             letterText.setFill(litColor);
@@ -854,35 +829,26 @@ public class DeltaBladeApp extends GameApplication {
             glow.setInput(shadow);
             letterText.setEffect(glow);
             
-            shineStripe.setVisible(true);
-            
-            TranslateTransition shine = new TranslateTransition(Duration.seconds(2.0), shineStripe);
-            shine.setFromX(-20);
-            shine.setToX(20);
-            shine.setCycleCount(Animation.INDEFINITE);
-            shine.setDelay(Duration.millis(idx * 300));
-            shine.play();
-            extraLetterAnimations.add(shine);
-            
             letterText.getTransforms().clear();
-            Scale pulseScale = new Scale(1, 1, 0, 0);
-            letterText.getTransforms().add(pulseScale);
+            letterText.setScaleX(1.0);
             
-            Timeline pulseTimeline = new Timeline(
-                new KeyFrame(Duration.ZERO, 
-                    new KeyValue(pulseScale.xProperty(), 1.0),
-                    new KeyValue(pulseScale.yProperty(), 1.0)),
-                new KeyFrame(Duration.seconds(0.8), 
-                    new KeyValue(pulseScale.xProperty(), 1.12),
-                    new KeyValue(pulseScale.yProperty(), 1.12)),
-                new KeyFrame(Duration.seconds(1.6), 
-                    new KeyValue(pulseScale.xProperty(), 1.0),
-                    new KeyValue(pulseScale.yProperty(), 1.0))
-            );
-            pulseTimeline.setCycleCount(Animation.INDEFINITE);
-            pulseTimeline.setDelay(Duration.millis(idx * 150));
-            pulseTimeline.play();
-            extraLetterAnimations.add(pulseTimeline);
+            Timeline flipTimeline = new Timeline();
+            double cycleDuration = 1.2 + idx * 0.1;
+            int steps = 60;
+            for (int i = 0; i <= steps; i++) {
+                double t = (double) i / steps;
+                double angle = t * 2 * Math.PI;
+                double rawScale = Math.cos(angle);
+                double clampedScale = Math.signum(rawScale) * Math.max(Math.abs(rawScale), MIN_FLIP_SCALE);
+                flipTimeline.getKeyFrames().add(
+                    new KeyFrame(Duration.seconds(cycleDuration * t), 
+                        new KeyValue(letterText.scaleXProperty(), clampedScale))
+                );
+            }
+            flipTimeline.setCycleCount(Animation.INDEFINITE);
+            flipTimeline.setDelay(Duration.millis(idx * 150));
+            flipTimeline.play();
+            extraLetterAnimations.add(flipTimeline);
             
             Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(litColor.darker());
@@ -891,7 +857,7 @@ public class DeltaBladeApp extends GameApplication {
             letterText.setFill(Color.rgb(45, 50, 60));
             letterText.setEffect(null);
             letterText.getTransforms().clear();
-            shineStripe.setVisible(false);
+            letterText.setScaleX(1.0);
             
             Rectangle frame = (Rectangle) letterGroup.getChildren().get(0);
             frame.setStroke(Color.rgb(60, 70, 90));

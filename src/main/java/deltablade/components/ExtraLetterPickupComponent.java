@@ -5,16 +5,17 @@ import com.almasb.fxgl.entity.component.Component;
 import deltablade.GameVars;
 import javafx.scene.Group;
 import javafx.scene.Node;
-import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Text;
 
 public class ExtraLetterPickupComponent extends Component {
     
     private final char letter;
     private final int letterIndex;
     private double speed = 65;
-    private double pulsePhase = 0;
-    private double shinePhase = 0;
-    private Rectangle shineStripe;
+    private double flipPhase = 0;
+    private Text letterText;
+    
+    private static final double MIN_SCALE_X = 0.18;
     
     public ExtraLetterPickupComponent(char letter, int letterIndex) {
         this.letter = letter;
@@ -26,13 +27,9 @@ public class ExtraLetterPickupComponent extends Component {
         Node view = entity.getViewComponent().getChildren().get(0);
         if (view instanceof Group group) {
             for (Node child : group.getChildren()) {
-                if (child instanceof Group shineGroup) {
-                    for (Node shineChild : shineGroup.getChildren()) {
-                        if (shineChild instanceof Rectangle rect && rect.getWidth() == 4) {
-                            shineStripe = rect;
-                            break;
-                        }
-                    }
+                if (child instanceof Text t) {
+                    letterText = t;
+                    break;
                 }
             }
         }
@@ -42,19 +39,12 @@ public class ExtraLetterPickupComponent extends Component {
     public void onUpdate(double tpf) {
         entity.translateY(speed * tpf);
         
-        pulsePhase += tpf * 4;
-        double scale = 1 + Math.sin(pulsePhase) * 0.12;
-        entity.setScaleX(scale);
-        entity.setScaleY(scale);
+        flipPhase += tpf * 4.0;
+        double rawScale = Math.cos(flipPhase);
+        double clampedScale = Math.signum(rawScale) * Math.max(Math.abs(rawScale), MIN_SCALE_X);
         
-        if (shineStripe != null) {
-            shinePhase += tpf * 50;
-            double shineX = -18 + (shinePhase % 44);
-            if (shineX > 26) {
-                shinePhase = 0;
-                shineX = -18;
-            }
-            shineStripe.setTranslateX(shineX);
+        if (letterText != null) {
+            letterText.setScaleX(clampedScale);
         }
         
         double playableLeft = GameVars.RAIL_WIDTH;
@@ -66,7 +56,7 @@ public class ExtraLetterPickupComponent extends Component {
             entity.setX(playableRight - 16);
         }
         
-        if (entity.getY() > FXGL.getAppHeight() + 20) {
+        if (entity.getY() > FXGL.getAppHeight() + 40) {
             entity.removeFromWorld();
         }
     }

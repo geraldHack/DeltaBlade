@@ -47,12 +47,12 @@ public class PlayerComponent extends Component {
         }
     }
     
-    public boolean canFire() {
+    public boolean canFire(int grade) {
         if (fireCooldown > 0) return false;
         
         int activeBullets = FXGL.geti(GameVars.ACTIVE_BULLETS);
         int ammoCap = FXGL.geti(GameVars.AMMO_CAP);
-        return activeBullets < ammoCap;
+        return activeBullets + grade <= ammoCap;
     }
     
     public void onFired() {

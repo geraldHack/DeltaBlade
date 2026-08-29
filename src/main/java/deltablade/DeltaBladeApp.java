@@ -193,27 +193,24 @@ public class DeltaBladeApp extends GameApplication {
         if (player == null || gameOver) return;
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
-        if (!pc.canFire()) return;
+        int grade = geti(GameVars.WEAPON_GRADE);
+        
+        if (!pc.canFire(grade)) return;
         
         pc.onFired();
-        int grade = geti(GameVars.WEAPON_GRADE);
         
         double centerX = pc.getCenterX();
         double topY = pc.getTopY();
         
         spawnBullet(centerX - 2, topY);
         
-        if (grade >= 2 && canFireMore()) {
+        if (grade >= 2) {
             spawnBullet(centerX - 12, topY + 5);
         }
         
-        if (grade >= 3 && canFireMore()) {
+        if (grade >= 3) {
             spawnBullet(centerX + 8, topY + 5);
         }
-    }
-    
-    private boolean canFireMore() {
-        return geti(GameVars.ACTIVE_BULLETS) < geti(GameVars.AMMO_CAP);
     }
     
     private void spawnBullet(double x, double y) {

@@ -16,6 +16,9 @@ public final class GameVars {
     public static final String EXTRA_A = "extraA";
     public static final String AUTOFIRE = "autofire";
     public static final String EXTRA_LETTER_SPAWNED_THIS_WAVE = "extraLetterSpawnedThisWave";
+    public static final String SQUAD_COMBOS = "squadCombos";
+    public static final String COGNITIVE_WINS = "cognitiveWins";
+    public static final String METEOR_WINS = "meteorWins";
     
     public static final int INITIAL_LIVES = 3;
     public static final int INITIAL_AMMO_CAP = 5;
@@ -30,6 +33,7 @@ public final class GameVars {
     public static final double EXTRA_LETTER_DROP_CHANCE = 0.025;
     public static final double PICKUP_DROP_CHANCE = 0.03;
     public static final double AUTOFIRE_DROP_CHANCE = 0.01;
+    public static final double MINIGAME_DROP_CHANCE = 0.01;
     
     public static final double COIN_WHITE_DROP_CHANCE = 0.08;
     public static final double COIN_GREEN_DROP_CHANCE = 0.025;

@@ -5,12 +5,6 @@ import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import deltablade.components.EnemyComponent;
 import javafx.geometry.Point2D;
-import javafx.scene.Group;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontWeight;
-import javafx.scene.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -271,10 +265,13 @@ public class WaveManager {
             return;
         }
         
-        if (enemiesSpawned < totalEnemiesInWave && squadsToSpawn > 0) {
+        if (enemiesSpawned < totalEnemiesInWave) {
             squadSpawnTimer += tpf;
             if (squadSpawnTimer >= squadSpawnDelay) {
                 squadSpawnTimer = 0;
+                if (squadsToSpawn <= 0) {
+                    squadsToSpawn = 1;
+                }
                 spawnNextSquad();
             }
         }
@@ -399,11 +396,12 @@ public class WaveManager {
         return EnemyComponent.EnemyType.BASIC;
     }
     
-    private void checkSquadBonuses() {
+    public void checkSquadBonuses() {
         for (Squad squad : activeSquads) {
             if (squad.isFullyDestroyed() && squad.earnedComboBonus()) {
                 int bonus = 500 * currentLevel;
                 inc(GameVars.SCORE, bonus);
+                inc(GameVars.SQUAD_COMBOS, 1);
                 showComboBonus(bonus);
                 squad.settled = true;
             }
@@ -411,31 +409,7 @@ public class WaveManager {
     }
     
     private void showComboBonus(int bonus) {
-        String message = "SQUAD COMBO! +" + bonus;
-        Color textColor = Color.GOLD;
-        
-        Rectangle bar = new Rectangle(getAppWidth(), 40);
-        bar.setFill(Color.rgb(20, 20, 20, 0.95));
-        bar.setStroke(textColor);
-        bar.setStrokeWidth(2);
-        bar.setTranslateX(0);
-        bar.setTranslateY(85);
-        
-        Text text = new Text(message);
-        text.setFont(Font.font("Monospace", FontWeight.BOLD, 24));
-        text.setFill(textColor);
-        text.setStroke(Color.BLACK);
-        text.setStrokeWidth(1);
-        
-        double textWidth = text.getLayoutBounds().getWidth();
-        text.setTranslateX((getAppWidth() - textWidth) / 2);
-        text.setTranslateY(113);
-        
-        Group banner = new Group(bar, text);
-        
-        getGameScene().addUINode(banner);
-        
-        runOnce(() -> getGameScene().removeUINode(banner), javafx.util.Duration.seconds(1.5));
+        FXGL.<DeltaBladeApp>getAppCast().showSquadCombo(bonus);
     }
     
     public void onEnemyDestroyed(int squadId, boolean wasEntering) {

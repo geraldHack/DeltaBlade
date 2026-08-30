@@ -9,7 +9,9 @@ public class PickupComponent extends Component {
         WEAPON_UPGRADE,
         EXTRA_AMMO,
         EXTRA_LIFE,
-        AUTOFIRE
+        AUTOFIRE,
+        METEOR,
+        COGNITIVE
     }
     
     private PickupType type;

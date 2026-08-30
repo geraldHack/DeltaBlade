@@ -10,9 +10,12 @@ import deltablade.components.CoinComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.ExplosionComponent;
 import deltablade.components.ExtraLetterPickupComponent;
+import deltablade.components.MeteorRockComponent;
 import deltablade.components.PickupComponent;
+import deltablade.components.BackgroundScrollComponent;
 import deltablade.components.PlayerAnimationComponent;
 import deltablade.components.PlayerComponent;
+import deltablade.components.RailPulseComponent;
 import deltablade.components.StarComponent;
 import javafx.scene.Group;
 import javafx.scene.Node;
@@ -56,18 +59,13 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
-        // TODO: Add Gerald's real blue ship PNGs (384x48, 8 frames each):
-        //   - player_blue_thruster.png (2508 bytes)
-        //   - player_blue_bank.png (3759 bytes)
-        //   - player_blue_bowwave.png (4603 bytes)
-        // Add to src/main/resources/assets/textures/ AND embed in EmbeddedTextures.TEXTURE_DATA
-        // Animation infrastructure is ready - just needs the lossless PNG bytes.
         Image thrusterSheet = EmbeddedTextures.getImage("player_blue_thruster.png", 384, 48);
         Image bankSheet = EmbeddedTextures.getImage("player_blue_bank.png", 384, 48);
         Image bowwaveSheet = EmbeddedTextures.getImage("player_blue_bowwave.png", 384, 48);
+        Image beamSheet = EmbeddedTextures.getImage("player_blue_beam.png", 384, 48);
         
         if (thrusterSheet != null && !thrusterSheet.isError()) {
-            PlayerAnimationComponent animComp = new PlayerAnimationComponent(thrusterSheet, bankSheet, bowwaveSheet);
+            PlayerAnimationComponent animComp = new PlayerAnimationComponent(thrusterSheet, bankSheet, bowwaveSheet, beamSheet);
             ImageView view = animComp.getView();
             
             return FXGL.entityBuilder(data)
@@ -183,6 +181,87 @@ public class DeltaBladeFactory implements EntityFactory {
                 .build();
     }
 
+    @Spawns("meteorPickup")
+    public Entity newMeteorPickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(orbPickup(Color.ORANGERED, Color.ORANGE, "M"))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.METEOR))
+                .build();
+    }
+
+    @Spawns("cognitivePickup")
+    public Entity newCognitivePickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(orbPickup(Color.CYAN, Color.AQUA, "C"))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.COGNITIVE))
+                .build();
+    }
+
+    @Spawns("meteorRock")
+    public Entity newMeteorRock(SpawnData data) {
+        double size = data.hasKey("size") ? data.<Double>get("size") : 36.0;
+        double baseSpeed = data.hasKey("baseSpeed") ? data.<Double>get("baseSpeed") : 120.0;
+        double driftX = data.hasKey("driftX") ? data.<Double>get("driftX") : 0.0;
+        double spin = data.hasKey("spin") ? data.<Double>get("spin") : 40.0;
+        int tint = data.hasKey("tint") ? data.<Integer>get("tint") : 0;
+
+        Image rock = EmbeddedTextures.getImage("asteroid1.png", 16, 16);
+        Node view;
+        if (rock != null && !rock.isError()) {
+            ImageView imageView = new ImageView(rock);
+            imageView.setFitWidth(size);
+            imageView.setFitHeight(size);
+            imageView.setSmooth(false);
+            javafx.scene.effect.ColorAdjust adjust = new javafx.scene.effect.ColorAdjust();
+            adjust.setHue(tint == 1 ? -0.18 : tint == 2 ? 0.1 : 0.0);
+            adjust.setSaturation(-0.15);
+            adjust.setBrightness(tint == 2 ? -0.1 : 0.05);
+            imageView.setEffect(adjust);
+            view = imageView;
+        } else {
+            javafx.scene.shape.Polygon poly = new javafx.scene.shape.Polygon(
+                    size * 0.5, 0,
+                    size * 0.95, size * 0.28,
+                    size * 0.82, size * 0.9,
+                    size * 0.2, size * 0.95,
+                    0, size * 0.4
+            );
+            poly.setFill(Color.rgb(110, 95, 80));
+            poly.setStroke(Color.rgb(50, 42, 36));
+            view = poly;
+        }
+
+        return FXGL.entityBuilder(data)
+                .type(EntityType.MINIGAME_HAZARD)
+                .viewWithBBox(view)
+                .zIndex(70)
+                .with(new MeteorRockComponent(baseSpeed, driftX, spin))
+                .build();
+    }
+
+    private static Group orbPickup(Color outer, Color inner, String letter) {
+        Circle glow = new Circle(14);
+        glow.setFill(new RadialGradient(
+                0, 0, 0.3, 0.3, 0.9, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.WHITE),
+                new Stop(0.35, inner),
+                new Stop(0.8, outer),
+                new Stop(1, Color.rgb(20, 10, 8))
+        ));
+        Text text = new Text(letter);
+        text.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        text.setFill(Color.WHITE);
+        text.setTranslateX(-5);
+        text.setTranslateY(5);
+        return new Group(glow, text);
+    }
+
     @Spawns("autofirePickup")
     public Entity newAutofirePickup(SpawnData data) {
         Circle outer = new Circle(14);
@@ -264,40 +343,88 @@ public class DeltaBladeFactory implements EntityFactory {
         int height = data.get("height");
         boolean isLeft = data.get("isLeft");
 
-        LinearGradient metalGradient;
-        if (isLeft) {
-            metalGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.rgb(40, 45, 55)),
-                    new Stop(0.2, Color.rgb(70, 80, 95)),
-                    new Stop(0.5, Color.rgb(90, 100, 115)),
-                    new Stop(0.7, Color.rgb(60, 70, 85)),
-                    new Stop(1, Color.rgb(30, 35, 45)));
-        } else {
-            metalGradient = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.rgb(30, 35, 45)),
-                    new Stop(0.3, Color.rgb(60, 70, 85)),
-                    new Stop(0.5, Color.rgb(90, 100, 115)),
-                    new Stop(0.8, Color.rgb(70, 80, 95)),
-                    new Stop(1, Color.rgb(40, 45, 55)));
-        }
+        LinearGradient metalGradient = isLeft
+                ? new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(18, 22, 32)),
+                    new Stop(0.18, Color.rgb(46, 54, 70)),
+                    new Stop(0.45, Color.rgb(78, 88, 108)),
+                    new Stop(0.72, Color.rgb(42, 50, 64)),
+                    new Stop(1, Color.rgb(12, 14, 22)))
+                : new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(12, 14, 22)),
+                    new Stop(0.28, Color.rgb(42, 50, 64)),
+                    new Stop(0.55, Color.rgb(78, 88, 108)),
+                    new Stop(0.82, Color.rgb(46, 54, 70)),
+                    new Stop(1, Color.rgb(18, 22, 32)));
+
+        Group railGroup = new Group();
 
         Rectangle rail = new Rectangle(width, height);
         rail.setFill(metalGradient);
-        
-        Rectangle innerBorder = new Rectangle(2, height - 4);
-        innerBorder.setFill(Color.rgb(50, 55, 65));
-        innerBorder.setX(isLeft ? width - 4 : 2);
-        innerBorder.setY(2);
-        
-        Rectangle highlight = new Rectangle(1, height);
-        highlight.setFill(Color.rgb(120, 130, 150, 0.5));
-        highlight.setX(isLeft ? 3 : width - 4);
+        railGroup.getChildren().add(rail);
 
-        Group railGroup = new Group(rail, innerBorder, highlight);
+        for (int y = 18; y < height - 18; y += 36) {
+            Rectangle seam = new Rectangle(width - 10, 1);
+            seam.setFill(Color.rgb(10, 12, 18, 0.7));
+            seam.setX(5);
+            seam.setY(y);
+            railGroup.getChildren().add(seam);
+
+            Rectangle seamHi = new Rectangle(width - 10, 1);
+            seamHi.setFill(Color.rgb(140, 160, 190, 0.18));
+            seamHi.setX(5);
+            seamHi.setY(y + 1);
+            railGroup.getChildren().add(seamHi);
+        }
+
+        for (int y = 28; y < height - 20; y += 36) {
+            double boltX = isLeft ? 11 : width - 15;
+            Circle bolt = new Circle(boltX, y, 2.4);
+            bolt.setFill(new RadialGradient(
+                    0, 0, 0.35, 0.3, 0.8, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.rgb(190, 205, 220)),
+                    new Stop(0.55, Color.rgb(110, 120, 140)),
+                    new Stop(1, Color.rgb(40, 45, 55))));
+            railGroup.getChildren().add(bolt);
+        }
+
+        Rectangle capTop = new Rectangle(width, 14);
+        capTop.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(90, 110, 140)),
+                new Stop(1, Color.rgb(28, 34, 46))));
+        railGroup.getChildren().add(capTop);
+
+        Rectangle capBottom = new Rectangle(width, 14);
+        capBottom.setY(height - 14);
+        capBottom.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(28, 34, 46)),
+                new Stop(1, Color.rgb(90, 110, 140))));
+        railGroup.getChildren().add(capBottom);
+
+        Rectangle outerEdge = new Rectangle(2, height);
+        outerEdge.setFill(Color.rgb(8, 10, 14));
+        outerEdge.setX(isLeft ? 0 : width - 2);
+        railGroup.getChildren().add(outerEdge);
+
+        Rectangle energy = new Rectangle(3, height - 28);
+        energy.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(40, 220, 255, 0.15)),
+                new Stop(0.5, Color.CYAN),
+                new Stop(1, Color.rgb(40, 220, 255, 0.15))));
+        energy.setX(isLeft ? width - 5 : 2);
+        energy.setY(14);
+        energy.setEffect(new javafx.scene.effect.DropShadow(10, Color.CYAN));
+        railGroup.getChildren().add(energy);
+
+        Rectangle innerShade = new Rectangle(3, height);
+        innerShade.setFill(Color.rgb(0, 0, 0, 0.45));
+        innerShade.setX(isLeft ? width - 8 : 5);
+        railGroup.getChildren().add(innerShade);
 
         return FXGL.entityBuilder(data)
                 .view(railGroup)
                 .zIndex(200)
+                .with(new RailPulseComponent(energy))
                 .build();
     }
 
@@ -400,13 +527,41 @@ public class DeltaBladeFactory implements EntityFactory {
         int width = data.get("width");
         int height = data.get("height");
 
-        Rectangle bg = new Rectangle(width, height);
-        bg.setFill(Color.rgb(5, 5, 16));
+        Rectangle fallback = new Rectangle(width, height);
+        fallback.setFill(Color.rgb(5, 5, 16));
+
+        Image space = EmbeddedTextures.getImage("space_bg.png", width, width);
+        if (space == null || space.isError()) {
+            return FXGL.entityBuilder(data)
+                    .at(0, 0)
+                    .view(fallback)
+                    .zIndex(-1000)
+                    .build();
+        }
+
+        double tileH = width;
+        ImageView tileA = new ImageView(space);
+        tileA.setFitWidth(width);
+        tileA.setFitHeight(tileH);
+        tileA.setSmooth(true);
+        tileA.setPreserveRatio(false);
+        tileA.setOpacity(0.85);
+
+        ImageView tileB = new ImageView(space);
+        tileB.setFitWidth(width);
+        tileB.setFitHeight(tileH);
+        tileB.setSmooth(true);
+        tileB.setPreserveRatio(false);
+        tileB.setOpacity(0.85);
+        tileB.setTranslateY(-tileH);
+
+        Group view = new Group(fallback, tileA, tileB);
 
         return FXGL.entityBuilder(data)
                 .at(0, 0)
-                .view(bg)
+                .view(view)
                 .zIndex(-1000)
+                .with(new BackgroundScrollComponent(tileA, tileB, tileH, 12))
                 .build();
     }
 

@@ -1,0 +1,37 @@
+.options-slider {
+    -fx-min-height: 22;
+}
+
+.options-slider .track {
+    -fx-background-color: #1a3050;
+    -fx-background-radius: 3;
+    -fx-pref-height: 6;
+    -fx-min-height: 6;
+    -fx-border-color: #4a90d9;
+    -fx-border-width: 1;
+    -fx-border-radius: 3;
+}
+
+.options-slider .thumb {
+    -fx-background-color: #4ecdc4;
+    -fx-background-radius: 8;
+    -fx-pref-width: 16;
+    -fx-pref-height: 16;
+    -fx-min-width: 16;
+    -fx-min-height: 16;
+    -fx-border-color: #9ff9f2;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+}
+
+.options-slider .thumb:hover {
+    -fx-background-color: #7ee8e0;
+}
+
+.options-slider:disabled .track {
+    -fx-opacity: 0.45;
+}
+
+.options-slider:disabled .thumb {
+    -fx-opacity: 0.45;
+}

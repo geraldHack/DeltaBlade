@@ -17,6 +17,8 @@ public class PlayerComponent extends Component {
     
     private boolean wasMovingLeft = false;
     private boolean wasMovingRight = false;
+    private double fireAnimTimer = 0;
+    private static final double FIRE_ANIM_DURATION = 0.36;
     
     @Override
     public void onUpdate(double tpf) {
@@ -24,6 +26,9 @@ public class PlayerComponent extends Component {
         
         if (fireCooldown > 0) {
             fireCooldown -= tpf;
+        }
+        if (fireAnimTimer > 0) {
+            fireAnimTimer -= tpf;
         }
         
         if (invulnerable) {
@@ -64,7 +69,11 @@ public class PlayerComponent extends Component {
     
     public void updateIdle() {
         if (!wasMovingLeft && !wasMovingRight) {
-            setAnimationState(PlayerAnimationComponent.AnimationState.IDLE);
+            if (fireAnimTimer > 0) {
+                setAnimationState(PlayerAnimationComponent.AnimationState.FIRING);
+            } else {
+                setAnimationState(PlayerAnimationComponent.AnimationState.IDLE);
+            }
         }
         wasMovingLeft = false;
         wasMovingRight = false;
@@ -96,6 +105,10 @@ public class PlayerComponent extends Component {
     
     public void onFired() {
         fireCooldown = FIRE_RATE;
+        fireAnimTimer = FIRE_ANIM_DURATION;
+        if (!wasMovingLeft && !wasMovingRight) {
+            setAnimationState(PlayerAnimationComponent.AnimationState.FIRING);
+        }
     }
     
     public void makeInvulnerable() {

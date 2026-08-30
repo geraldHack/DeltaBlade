@@ -7,5 +7,6 @@ public enum EntityType {
     ENEMY_BULLET,
     PICKUP,
     EXTRA_LETTER_PICKUP,
-    COIN
+    COIN,
+    MINIGAME_HAZARD
 }

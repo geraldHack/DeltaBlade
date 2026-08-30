@@ -9,6 +9,10 @@ import deltablade.components.EnemyComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
+import deltablade.minigames.CognitiveTestGame;
+import deltablade.minigames.MeteorStormGame;
+import deltablade.minigames.Minigame;
+import deltablade.minigames.MinigameHost;
 import javafx.animation.Animation;
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
@@ -18,12 +22,17 @@ import javafx.animation.ParallelTransition;
 import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
@@ -42,17 +51,22 @@ import java.util.Random;
 
 import static com.almasb.fxgl.dsl.FXGL.*;
 
-public class DeltaBladeApp extends GameApplication {
+public class DeltaBladeApp extends GameApplication implements MinigameHost {
     
     private Entity player;
     private boolean movingLeft = false;
     private boolean movingRight = false;
+    private boolean movingUp = false;
+    private boolean movingDown = false;
+    private boolean holdingFire = false;
     private boolean gameOver = false;
     private boolean showingTitleScreen = true;
     private boolean gameStarted = false;
     
     private WaveManager waveManager;
     private boolean waveTransition = false;
+    private boolean minigameActive = false;
+    private Minigame activeMinigame;
     
     private static final Random random = new Random();
     private int frameCount = 0;
@@ -61,6 +75,10 @@ public class DeltaBladeApp extends GameApplication {
     private List<Node> titleScreenNodes = new ArrayList<>();
     private List<Animation> extraLetterAnimations = new ArrayList<>();
     private List<Node> activeBanners = new ArrayList<>();
+    private boolean optionsOpen = false;
+    private boolean enginePausedByOptions = false;
+    private Node optionsRoot;
+    private static boolean escFilterInstalled = false;
     
     private Timeline activeShake = null;
     private List<Node> shakenViewNodes = new ArrayList<>();
@@ -97,6 +115,9 @@ public class DeltaBladeApp extends GameApplication {
         vars.put(GameVars.EXTRA_A, 0);
         vars.put(GameVars.AUTOFIRE, false);
         vars.put(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 0);
+        vars.put(GameVars.SQUAD_COMBOS, 0);
+        vars.put(GameVars.COGNITIVE_WINS, 0);
+        vars.put(GameVars.METEOR_WINS, 0);
     }
     
     @Override
@@ -145,44 +166,140 @@ public class DeltaBladeApp extends GameApplication {
             }
         }, KeyCode.D);
         
+        getInput().addAction(new UserAction("Move Up") {
+            @Override
+            protected void onAction() {
+                movingUp = true;
+            }
+            @Override
+            protected void onActionEnd() {
+                movingUp = false;
+            }
+        }, KeyCode.UP);
+
+        getInput().addAction(new UserAction("Move Up W") {
+            @Override
+            protected void onAction() {
+                movingUp = true;
+            }
+            @Override
+            protected void onActionEnd() {
+                movingUp = false;
+            }
+        }, KeyCode.W);
+
+        getInput().addAction(new UserAction("Move Down") {
+            @Override
+            protected void onAction() {
+                movingDown = true;
+            }
+            @Override
+            protected void onActionEnd() {
+                movingDown = false;
+            }
+        }, KeyCode.DOWN);
+
+        getInput().addAction(new UserAction("Move Down S") {
+            @Override
+            protected void onAction() {
+                movingDown = true;
+            }
+            @Override
+            protected void onActionEnd() {
+                movingDown = false;
+            }
+        }, KeyCode.S);
+
         getInput().addAction(new UserAction("Fire") {
             @Override
             protected void onActionBegin() {
+                holdingFire = true;
                 if (!gameOver) {
                     fire();
                 }
             }
             @Override
             protected void onAction() {
-                if (!gameOver && getb(GameVars.AUTOFIRE)) {
+                holdingFire = true;
+                if (!gameOver && !minigameActive && getb(GameVars.AUTOFIRE)) {
                     fire();
                 }
+            }
+            @Override
+            protected void onActionEnd() {
+                holdingFire = false;
             }
         }, KeyCode.SPACE);
         
+        bindTestDigit("Test 1", KeyCode.DIGIT1, KeyCode.NUMPAD1);
+        bindTestDigit("Test 2", KeyCode.DIGIT2, KeyCode.NUMPAD2);
+        bindTestDigit("Test 3", KeyCode.DIGIT3, KeyCode.NUMPAD3);
+        bindTestDigit("Test 4", KeyCode.DIGIT4, KeyCode.NUMPAD4);
+        bindTestDigit("Test 5", KeyCode.DIGIT5, KeyCode.NUMPAD5);
+        bindTestDigit("Test 6", KeyCode.DIGIT6, KeyCode.NUMPAD6);
+        bindTestDigit("Test 7", KeyCode.DIGIT7, KeyCode.NUMPAD7);
+        bindTestDigit("Test 8", KeyCode.DIGIT8, KeyCode.NUMPAD8);
+        bindTestDigit("Test 9", KeyCode.DIGIT9, KeyCode.NUMPAD9);
+
         getInput().addAction(new UserAction("Fire X") {
             @Override
             protected void onActionBegin() {
+                holdingFire = true;
                 if (!gameOver) {
                     fire();
                 }
             }
             @Override
             protected void onAction() {
-                if (!gameOver && getb(GameVars.AUTOFIRE)) {
+                holdingFire = true;
+                if (!gameOver && !minigameActive && getb(GameVars.AUTOFIRE)) {
                     fire();
                 }
             }
+            @Override
+            protected void onActionEnd() {
+                holdingFire = false;
+            }
         }, KeyCode.X);
+
+        getInput().addAction(new UserAction("Minigame Bonus") {
+            @Override
+            protected void onActionBegin() {
+                if (minigameActive && activeMinigame != null) {
+                    activeMinigame.onBonusKey();
+                }
+            }
+        }, KeyCode.B);
+
+        getInput().addAction(new UserAction("Minigame Bonus Click") {
+            @Override
+            protected void onActionBegin() {
+                if (minigameActive && activeMinigame != null) {
+                    activeMinigame.onBonusKey();
+                }
+            }
+        }, MouseButton.SECONDARY);
         
         getInput().addAction(new UserAction("Restart") {
             @Override
             protected void onActionBegin() {
-                if (gameOver) {
+                if (gameOver && !optionsOpen) {
                     restartGame();
                 }
             }
         }, KeyCode.R);
+    }
+
+    private void bindTestDigit(String name, KeyCode... codes) {
+        for (int i = 0; i < codes.length; i++) {
+            KeyCode code = codes[i];
+            getInput().addAction(new UserAction(name + " " + code) {
+                @Override
+                protected void onActionBegin() {
+                    TestMode.feed(code).ifPresent(DeltaBladeApp.this::dropTestMinigame);
+                }
+            }, code);
+        }
     }
     
     private static boolean initialWindowSizeSet = false;
@@ -197,11 +314,21 @@ public class DeltaBladeApp extends GameApplication {
         waveTransition = false;
         showingTitleScreen = true;
         gameStarted = false;
+        optionsOpen = false;
+        enginePausedByOptions = false;
+        optionsRoot = null;
         player = null;
         waveManager = null;
+        minigameActive = false;
+        activeMinigame = null;
+        holdingFire = false;
+        movingUp = false;
+        movingDown = false;
         frameCount = 0;
         
         getGameWorld().addEntityFactory(new DeltaBladeFactory());
+        applySystemCursor();
+        installTestKeyFilter();
         
         getGameScene().getViewport().setX(0);
         getGameScene().getViewport().setY(0);
@@ -283,9 +410,68 @@ public class DeltaBladeApp extends GameApplication {
         subtitle.setTranslateX(getAppWidth() / 2 - 90);
         subtitle.setTranslateY(220);
         
-        Button startButton = new Button("START GAME");
-        startButton.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
-        startButton.setStyle(
+        Button startButton = createMenuButton("START GAME");
+        startButton.setOnAction(e -> startActualGame());
+        
+        Button optionsButton = createMenuButton("OPTIONEN");
+        optionsButton.setOnAction(e -> showOptions());
+        
+        VBox menuBox = new VBox(16, startButton, optionsButton);
+        menuBox.setAlignment(Pos.CENTER);
+        menuBox.setPrefWidth(260);
+        menuBox.setTranslateX(getAppWidth() / 2.0 - 130);
+        menuBox.setTranslateY(300);
+        
+        Text controls = new Text("Pfeiltasten/A,D = Bewegen | SPACE/X = Feuer (tippen)");
+        controls.setFont(Font.font("Monospace", 12));
+        controls.setFill(Color.GRAY);
+        controls.setTranslateX(getAppWidth() / 2 - 190);
+        controls.setTranslateY(470);
+        
+        Text extraInfo = new Text("B = Schüsse gleichzeitig | W = Waffe | EXTRA = Leben");
+        extraInfo.setFont(Font.font("Monospace", 12));
+        extraInfo.setFill(Color.GOLD);
+        extraInfo.setTranslateX(getAppWidth() / 2 - 195);
+        extraInfo.setTranslateY(500);
+        
+        Text optionsHint = new Text("ESC = Optionen");
+        optionsHint.setFont(Font.font("Monospace", 11));
+        optionsHint.setFill(Color.rgb(120, 160, 190));
+        optionsHint.setTranslateX(getAppWidth() / 2.0 - 55);
+        optionsHint.setTranslateY(530);
+
+        Text testHint = new Text("TEST  111 = Meteor  |  222 = Cognitive");
+        testHint.setFont(Font.font("Monospace", 11));
+        testHint.setFill(Color.rgb(90, 110, 130));
+        testHint.setTranslateX(getAppWidth() / 2.0 - 145);
+        testHint.setTranslateY(552);
+        
+        titleScreenNodes.add(overlay);
+        titleScreenNodes.add(title);
+        titleScreenNodes.add(subtitle);
+        titleScreenNodes.add(menuBox);
+        titleScreenNodes.add(controls);
+        titleScreenNodes.add(extraInfo);
+        titleScreenNodes.add(optionsHint);
+        titleScreenNodes.add(testHint);
+        
+        for (Node node : titleScreenNodes) {
+            getGameScene().addUINode(node);
+        }
+        
+        installEscFilter();
+        MusicHelper.applyFromStore();
+        
+        if (preloadError != null) {
+            showBanner(preloadError, Color.RED);
+        }
+    }
+    
+    private Button createMenuButton(String label) {
+        Button button = new Button(label);
+        button.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
+        button.setPrefWidth(240);
+        String base =
             "-fx-background-color: linear-gradient(to bottom, #2a5298, #1e3c72);" +
             "-fx-text-fill: white;" +
             "-fx-padding: 15 40;" +
@@ -293,12 +479,8 @@ public class DeltaBladeApp extends GameApplication {
             "-fx-border-color: #4a90d9;" +
             "-fx-border-width: 2;" +
             "-fx-border-radius: 8;" +
-            "-fx-cursor: hand;"
-        );
-        startButton.setTranslateX(getAppWidth() / 2 - 85);
-        startButton.setTranslateY(320);
-        
-        startButton.setOnMouseEntered(e -> startButton.setStyle(
+            "-fx-cursor: hand;";
+        String hover =
             "-fx-background-color: linear-gradient(to bottom, #3a6ab8, #2e4c82);" +
             "-fx-text-fill: white;" +
             "-fx-padding: 15 40;" +
@@ -306,46 +488,92 @@ public class DeltaBladeApp extends GameApplication {
             "-fx-border-color: #6ab0f9;" +
             "-fx-border-width: 2;" +
             "-fx-border-radius: 8;" +
-            "-fx-cursor: hand;"
-        ));
-        startButton.setOnMouseExited(e -> startButton.setStyle(
-            "-fx-background-color: linear-gradient(to bottom, #2a5298, #1e3c72);" +
-            "-fx-text-fill: white;" +
-            "-fx-padding: 15 40;" +
-            "-fx-background-radius: 8;" +
-            "-fx-border-color: #4a90d9;" +
-            "-fx-border-width: 2;" +
-            "-fx-border-radius: 8;" +
-            "-fx-cursor: hand;"
-        ));
-        
-        startButton.setOnAction(e -> startActualGame());
-        
-        Text controls = new Text("Pfeiltasten/A,D = Bewegen | SPACE/X = Feuer (tippen)");
-        controls.setFont(Font.font("Monospace", 12));
-        controls.setFill(Color.GRAY);
-        controls.setTranslateX(getAppWidth() / 2 - 190);
-        controls.setTranslateY(450);
-        
-        Text extraInfo = new Text("B = Schüsse gleichzeitig | W = Waffe | EXTRA = Leben");
-        extraInfo.setFont(Font.font("Monospace", 12));
-        extraInfo.setFill(Color.GOLD);
-        extraInfo.setTranslateX(getAppWidth() / 2 - 195);
-        extraInfo.setTranslateY(480);
-        
-        titleScreenNodes.add(overlay);
-        titleScreenNodes.add(title);
-        titleScreenNodes.add(subtitle);
-        titleScreenNodes.add(startButton);
-        titleScreenNodes.add(controls);
-        titleScreenNodes.add(extraInfo);
-        
-        for (Node node : titleScreenNodes) {
-            getGameScene().addUINode(node);
+            "-fx-cursor: hand;";
+        button.setStyle(base);
+        button.setOnMouseEntered(e -> button.setStyle(hover));
+        button.setOnMouseExited(e -> button.setStyle(base));
+        return button;
+    }
+    
+    /**
+     * FXGL's bundled cursor image is corrupt pixel data, not a real pointer.
+     * Replace it with the OS cursor so we don't show a giant blob.
+     */
+    private void applySystemCursor() {
+        getGameScene().setCursor(Cursor.DEFAULT);
+        Platform.runLater(() -> {
+            var scene = getPrimaryStage().getScene();
+            if (scene != null) {
+                scene.setCursor(Cursor.DEFAULT);
+            }
+        });
+    }
+
+    private void installEscFilter() {
+        if (escFilterInstalled) {
+            return;
         }
+        Platform.runLater(() -> {
+            var scene = getPrimaryStage().getScene();
+            if (scene == null) {
+                return;
+            }
+            scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() == KeyCode.ESCAPE) {
+                    toggleOptions();
+                    e.consume();
+                }
+            });
+            escFilterInstalled = true;
+        });
+    }
+
+    private void installTestKeyFilter() {
+        var root = getGameScene().getRoot();
+        if (Boolean.TRUE.equals(root.getProperties().get("dbTestKeys"))) {
+            return;
+        }
+        root.getProperties().put("dbTestKeys", true);
+        root.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            TestMode.feed(e.getCode()).ifPresent(this::dropTestMinigame);
+        });
+    }
+    
+    private void toggleOptions() {
+        if (optionsOpen) {
+            hideOptions();
+        } else {
+            showOptions();
+        }
+    }
+    
+    private void showOptions() {
+        if (optionsOpen) {
+            return;
+        }
+        OptionsOverlay overlay = new OptionsOverlay(this::hideOptions);
+        optionsRoot = overlay.getRoot();
+        getGameScene().addUINode(optionsRoot);
+        optionsOpen = true;
         
-        if (preloadError != null) {
-            showBanner(preloadError, Color.RED);
+        if (gameStarted && !showingTitleScreen) {
+            getGameController().pauseEngine();
+            enginePausedByOptions = true;
+        }
+    }
+    
+    private void hideOptions() {
+        if (!optionsOpen) {
+            return;
+        }
+        if (optionsRoot != null) {
+            getGameScene().removeUINode(optionsRoot);
+            optionsRoot = null;
+        }
+        optionsOpen = false;
+        if (enginePausedByOptions) {
+            getGameController().resumeEngine();
+            enginePausedByOptions = false;
         }
     }
     
@@ -361,24 +589,42 @@ public class DeltaBladeApp extends GameApplication {
         int railWidth = GameVars.RAIL_WIDTH;
         int innerWidth = getAppWidth() - 2 * railWidth;
         
-        Rectangle bar = new Rectangle(innerWidth, 40);
-        bar.setFill(Color.rgb(20, 20, 20, 0.95));
+        Rectangle bar = new Rectangle(innerWidth, 48);
+        bar.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(8, 16, 28, 0.96)),
+                new Stop(0.5, Color.rgb(16, 28, 44, 0.96)),
+                new Stop(1, Color.rgb(8, 16, 28, 0.96))));
         bar.setStroke(textColor);
-        bar.setStrokeWidth(2);
+        bar.setStrokeWidth(1.5);
         bar.setTranslateX(railWidth);
-        bar.setTranslateY(40);
+        bar.setTranslateY(48);
+        
+        Rectangle topLine = new Rectangle(innerWidth, 2);
+        topLine.setFill(textColor);
+        topLine.setOpacity(0.85);
+        topLine.setTranslateX(railWidth);
+        topLine.setTranslateY(48);
+        
+        Rectangle bottomLine = new Rectangle(innerWidth, 2);
+        bottomLine.setFill(textColor);
+        bottomLine.setOpacity(0.85);
+        bottomLine.setTranslateX(railWidth);
+        bottomLine.setTranslateY(94);
         
         Text text = new Text(message);
-        text.setFont(Font.font("Monospace", FontWeight.BOLD, 24));
+        text.setFont(Font.font("Monospace", FontWeight.BOLD, 26));
         text.setFill(textColor);
-        text.setStroke(Color.BLACK);
-        text.setStrokeWidth(1);
+        text.setStroke(Color.rgb(0, 0, 0, 0.8));
+        text.setStrokeWidth(1.2);
+        DropShadow glow = new DropShadow(18, textColor);
+        glow.setSpread(0.25);
+        text.setEffect(glow);
         
         double textWidth = text.getLayoutBounds().getWidth();
         text.setTranslateX(railWidth + (innerWidth - textWidth) / 2);
-        text.setTranslateY(68);
+        text.setTranslateY(80);
         
-        Group banner = new Group(bar, text);
+        Group banner = new Group(bar, topLine, bottomLine, text);
         
         activeBanners.add(banner);
         getGameScene().addUINode(banner);
@@ -397,6 +643,7 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void startActualGame() {
+        hideOptions();
         hideTitleScreen();
         showingTitleScreen = false;
         gameStarted = true;
@@ -420,6 +667,9 @@ public class DeltaBladeApp extends GameApplication {
         set(GameVars.MONEY, 0);
         set(GameVars.AUTOFIRE, false);
         set(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 0);
+        set(GameVars.SQUAD_COMBOS, 0);
+        set(GameVars.COGNITIVE_WINS, 0);
+        set(GameVars.METEOR_WINS, 0);
         for (String var : GameVars.EXTRA_VARS) {
             set(var, 0);
         }
@@ -435,9 +685,6 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void spawnStars() {
-        spawnNebulae();
-        spawnDistantPlanet();
-        
         for (int i = 0; i < 80; i++) {
             double x = random.nextDouble() * getAppWidth();
             double y = random.nextDouble() * getAppHeight();
@@ -465,28 +712,6 @@ public class DeltaBladeApp extends GameApplication {
                     .put("scrollSpeed", scrollSpeed)
                     .put("isNear", true));
         }
-    }
-    
-    private void spawnNebulae() {
-        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(150, 200)
-                .put("radius", 180.0)
-                .put("color", Color.rgb(60, 30, 90))
-                .put("opacity", 0.25));
-        
-        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(600, 350)
-                .put("radius", 220.0)
-                .put("color", Color.rgb(30, 60, 80))
-                .put("opacity", 0.2));
-        
-        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(400, 500)
-                .put("radius", 150.0)
-                .put("color", Color.rgb(80, 40, 70))
-                .put("opacity", 0.18));
-    }
-    
-    private void spawnDistantPlanet() {
-        spawn("distantPlanet", new com.almasb.fxgl.entity.SpawnData(680, 80)
-                .put("radius", 45.0));
     }
     
     private void spawnPlayer() {
@@ -522,11 +747,31 @@ public class DeltaBladeApp extends GameApplication {
         
         showBanner(message, color, 2.0);
     }
+
+    public void showSquadCombo(int bonus) {
+        showBanner("SQUAD COMBO  +" + bonus, Color.GOLD, 1.8);
+        if (comboPlate != null) {
+            comboPlate.setStroke(Color.GOLD);
+            comboPlate.setStrokeWidth(2);
+            runOnce(() -> {
+                if (comboPlate != null) {
+                    comboPlate.setStroke(Color.rgb(255, 160, 40, 0.45));
+                    comboPlate.setStrokeWidth(1.2);
+                }
+            }, Duration.seconds(1.8));
+        }
+    }
     
     private static final double BULLET_SPEED = -500;
     
     private void fire() {
-        if (player == null || gameOver || showingTitleScreen) return;
+        if (minigameActive) {
+            if (activeMinigame != null) {
+                activeMinigame.onFirePress();
+            }
+            return;
+        }
+        if (player == null || gameOver || showingTitleScreen || optionsOpen) return;
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
         int grade = geti(GameVars.WEAPON_GRADE);
@@ -563,7 +808,8 @@ public class DeltaBladeApp extends GameApplication {
         inc(GameVars.ACTIVE_BULLETS, 1);
     }
 
-    private void spawnExplosion(double centerX, double centerY, String size) {
+    @Override
+    public void spawnExplosion(double centerX, double centerY, String size) {
         spawn("explosion", new com.almasb.fxgl.entity.SpawnData(centerX, centerY)
                 .put("size", size));
         
@@ -785,6 +1031,7 @@ public class DeltaBladeApp extends GameApplication {
                 inc(GameVars.ENEMIES_REMAINING, -1);
                 
                 waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
+                waveManager.checkSquadBonuses();
                 
                 double deathX = enemy.getX() + enemy.getWidth() / 2;
                 double deathY = enemy.getY() + enemy.getHeight() / 2;
@@ -844,6 +1091,9 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void playerHit(PlayerComponent pc) {
+        if (minigameActive) {
+            return;
+        }
         inc(GameVars.LIVES, -1);
         pc.makeInvulnerable();
         
@@ -882,6 +1132,12 @@ public class DeltaBladeApp extends GameApplication {
         }
         
         double roll = random.nextDouble();
+
+        if (roll < GameVars.MINIGAME_DROP_CHANCE) {
+            spawn(random.nextBoolean() ? "meteorPickup" : "cognitivePickup", x - 14, y - 14);
+            return;
+        }
+        roll -= GameVars.MINIGAME_DROP_CHANCE;
         
         if (roll < GameVars.AUTOFIRE_DROP_CHANCE) {
             if (!getb(GameVars.AUTOFIRE)) {
@@ -1051,11 +1307,23 @@ public class DeltaBladeApp extends GameApplication {
                 showBanner("AUTO", Color.CYAN, 1.2);
                 SoundHelper.play("autofire.wav");
             }
+            case METEOR -> {
+                inc(GameVars.SCORE, 25);
+                startMinigame(new MeteorStormGame());
+            }
+            case COGNITIVE -> {
+                inc(GameVars.SCORE, 25);
+                SoundHelper.play("cognitive_test.mp3");
+                startMinigame(new CognitiveTestGame());
+            }
             default -> {}
         }
     }
     
     private void checkWaveComplete() {
+        if (minigameActive) {
+            return;
+        }
         if (waveManager.isWaveComplete() && !waveTransition) {
             waveTransition = true;
             
@@ -1106,6 +1374,7 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void restartGame() {
+        hideOptions();
         stopExtraLetterAnimations();
         if (activeShake != null) {
             activeShake.stop();
@@ -1125,17 +1394,202 @@ public class DeltaBladeApp extends GameApplication {
         extraLetterAnimations.clear();
     }
     
+    private void dropTestMinigame(TestMode.Drop drop) {
+        if (drop == null) {
+            return;
+        }
+        if (drop.spawnName() == null) {
+            showBanner(drop.banner(), Color.LIGHTGRAY, 1.2);
+            return;
+        }
+        if (gameOver || optionsOpen || minigameActive) {
+            return;
+        }
+        if (!gameStarted || showingTitleScreen || player == null) {
+            if (showingTitleScreen) {
+                startActualGame();
+            }
+            if (player == null) {
+                return;
+            }
+        }
+        double x = player.getX() + player.getWidth() / 2 - 14;
+        double y = Math.max(56, player.getY() - 90);
+        spawn(drop.spawnName(), x, y);
+        showBanner(drop.banner(), Color.LIGHTGRAY, 1.2);
+    }
+
+    private void startMinigame(Minigame game) {
+        if (game == null || gameOver || showingTitleScreen) {
+            return;
+        }
+        waveTransition = true;
+        minigameActive = true;
+        clearWaveEntities();
+        activeMinigame = game;
+        game.start(this);
+    }
+
+    private void clearWaveEntities() {
+        for (EntityType type : List.of(
+                EntityType.ENEMY,
+                EntityType.PLAYER_BULLET,
+                EntityType.ENEMY_BULLET,
+                EntityType.PICKUP,
+                EntityType.EXTRA_LETTER_PICKUP,
+                EntityType.COIN,
+                EntityType.MINIGAME_HAZARD)) {
+            for (Entity entity : List.copyOf(getGameWorld().getEntitiesByType(type))) {
+                if (entity.isActive()) {
+                    entity.removeFromWorld();
+                }
+            }
+        }
+        set(GameVars.ACTIVE_BULLETS, 0);
+        set(GameVars.ENEMIES_REMAINING, 0);
+    }
+
+    @Override
+    public void finishMinigame(boolean won, int scoreBonus, int moneyBonus, String banner, Color color) {
+        if (activeMinigame != null) {
+            activeMinigame.cleanup();
+            activeMinigame = null;
+        }
+        minigameActive = false;
+        MusicHelper.applyFromStore();
+        hidePlayer(false);
+
+        if (scoreBonus > 0) {
+            inc(GameVars.SCORE, scoreBonus);
+        }
+        if (moneyBonus > 0) {
+            inc(GameVars.MONEY, moneyBonus);
+        }
+        if (banner != null && !banner.isBlank()) {
+            showBanner(banner, color, 2.0);
+        }
+
+        runOnce(() -> {
+            if (!gameOver && !showingTitleScreen) {
+                inc(GameVars.LEVEL, 1);
+                startWave();
+            }
+        }, Duration.seconds(2));
+    }
+
+    @Override
+    public void displayBanner(String message, Color color, double seconds) {
+        showBanner(message, color, seconds);
+    }
+
+    @Override
+    public Entity player() {
+        return player;
+    }
+
+    @Override
+    public boolean holdingFire() {
+        return holdingFire;
+    }
+
+    @Override
+    public boolean movingLeft() {
+        return movingLeft;
+    }
+
+    @Override
+    public boolean movingRight() {
+        return movingRight;
+    }
+
+    @Override
+    public boolean movingUp() {
+        return movingUp;
+    }
+
+    @Override
+    public boolean movingDown() {
+        return movingDown;
+    }
+
+    @Override
+    public double playLeft() {
+        return GameVars.RAIL_WIDTH;
+    }
+
+    @Override
+    public double playRight() {
+        return getAppWidth() - GameVars.RAIL_WIDTH;
+    }
+
+    @Override
+    public double playTop() {
+        return 48;
+    }
+
+    @Override
+    public double playBottom() {
+        return getAppHeight();
+    }
+
+    @Override
+    public void addUi(Node node) {
+        getGameScene().addUINode(node);
+    }
+
+    @Override
+    public void removeUi(Node node) {
+        getGameScene().removeUINode(node);
+    }
+
+    @Override
+    public void hidePlayer(boolean hide) {
+        if (player != null && player.isActive()) {
+            player.getViewComponent().setOpacity(hide ? 0.0 : 1.0);
+        }
+    }
+
+    @Override
+    public void playMusicOverride(String fileName) {
+        MusicHelper.playOverride(fileName);
+    }
+
+    @Override
+    public void restoreMusic() {
+        MusicHelper.applyFromStore();
+    }
+
+    @Override
+    public void spawnCoinAt(double x, double y, String coinType) {
+        spawnCoin(x, y, coinType);
+    }
+
     private static final double MAX_TPF = 1.0 / 45.0;
     
     @Override
     protected void onUpdate(double tpf) {
-        if (showingTitleScreen || gameOver || player == null) return;
+        if (showingTitleScreen || gameOver || optionsOpen || player == null) return;
         
         frameCount++;
         if (frameCount <= WARMUP_FRAMES) {
             tpf = Math.min(tpf, 0.008);
         } else {
             tpf = Math.min(tpf, MAX_TPF);
+        }
+
+        if (minigameActive && activeMinigame != null) {
+            if (activeMinigame.usesPlayerShip()) {
+                PlayerComponent pc = player.getComponent(PlayerComponent.class);
+                if (movingLeft) {
+                    pc.moveLeft(tpf);
+                }
+                if (movingRight) {
+                    pc.moveRight(tpf);
+                }
+                pc.updateIdle();
+            }
+            activeMinigame.update(tpf);
+            return;
         }
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
@@ -1161,6 +1615,7 @@ public class DeltaBladeApp extends GameApplication {
     private Rectangle livesBar;
     private Rectangle autoLamp;
     private Text autoLampText;
+    private Rectangle comboPlate;
     
     private static final Color[] LETTER_COLORS = {
         Color.rgb(255, 80, 80),
@@ -1290,26 +1745,101 @@ public class DeltaBladeApp extends GameApplication {
         updateBars();
         updateAutoLamp();
         
-        int hudY = 24;
-        
+        int playX = railWidth;
+        int playW = getAppWidth() - 2 * railWidth;
+
+        Rectangle hudStrip = new Rectangle(playW, 40);
+        hudStrip.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.rgb(6, 12, 22, 0.82)),
+                new Stop(1, Color.rgb(6, 12, 22, 0.35))));
+        hudStrip.setTranslateX(playX);
+        hudStrip.setTranslateY(4);
+        getGameScene().addUINode(hudStrip);
+
+        Rectangle hudEdge = new Rectangle(playW, 1);
+        hudEdge.setFill(Color.rgb(60, 210, 255, 0.45));
+        hudEdge.setTranslateX(playX);
+        hudEdge.setTranslateY(43);
+        getGameScene().addUINode(hudEdge);
+
+        Text scoreCaption = new Text("SCORE");
+        scoreCaption.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+        scoreCaption.setFill(Color.rgb(90, 210, 240));
+        scoreCaption.setTranslateX(playX + 12);
+        scoreCaption.setTranslateY(16);
+        getGameScene().addUINode(scoreCaption);
+
         Text scoreLabel = new Text();
-        scoreLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        scoreLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
         scoreLabel.setFill(Color.WHITE);
-        scoreLabel.setTranslateX(railWidth + 10);
-        scoreLabel.setTranslateY(hudY);
-        scoreLabel.textProperty().bind(getip(GameVars.SCORE).asString("SCORE %d"));
-        
-        DropShadow scoreShadow = new DropShadow(3, Color.BLACK);
-        scoreLabel.setEffect(scoreShadow);
+        scoreLabel.setTranslateX(playX + 12);
+        scoreLabel.setTranslateY(36);
+        scoreLabel.textProperty().bind(getip(GameVars.SCORE).asString("%06d"));
+        DropShadow scoreGlow = new DropShadow(12, Color.CYAN);
+        scoreGlow.setSpread(0.15);
+        scoreLabel.setEffect(scoreGlow);
         getGameScene().addUINode(scoreLabel);
-        
-        
+
+        int comboPanelW = 92;
+        int comboX = playX + (playW - comboPanelW) / 2;
+
+        comboPlate = new Rectangle(comboPanelW, 30);
+        comboPlate.setArcWidth(6);
+        comboPlate.setArcHeight(6);
+        comboPlate.setFill(Color.rgb(10, 18, 32, 0.9));
+        comboPlate.setStroke(Color.rgb(255, 160, 40, 0.45));
+        comboPlate.setStrokeWidth(1.2);
+        comboPlate.setTranslateX(comboX);
+        comboPlate.setTranslateY(8);
+        getGameScene().addUINode(comboPlate);
+
+        Text comboCaption = new Text("COMBO");
+        comboCaption.setFont(Font.font("Monospace", FontWeight.BOLD, 8));
+        comboCaption.setFill(Color.rgb(255, 170, 60));
+        comboCaption.setTranslateX(comboX + 8);
+        comboCaption.setTranslateY(19);
+        getGameScene().addUINode(comboCaption);
+
+        Text comboLabel = new Text();
+        comboLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
+        comboLabel.setFill(Color.rgb(255, 200, 90));
+        comboLabel.setTranslateX(comboX + 52);
+        comboLabel.setTranslateY(31);
+        comboLabel.textProperty().bind(getip(GameVars.SQUAD_COMBOS).asString("x%d"));
+        DropShadow comboGlow = new DropShadow(10, Color.ORANGE);
+        comboGlow.setSpread(0.2);
+        comboLabel.setEffect(comboGlow);
+        getGameScene().addUINode(comboLabel);
+
+        int wavePanelW = 86;
+        int waveX = playX + playW - wavePanelW - 8;
+
+        Rectangle wavePlate = new Rectangle(wavePanelW, 30);
+        wavePlate.setArcWidth(6);
+        wavePlate.setArcHeight(6);
+        wavePlate.setFill(Color.rgb(10, 18, 32, 0.9));
+        wavePlate.setStroke(Color.rgb(255, 210, 70, 0.7));
+        wavePlate.setStrokeWidth(1.2);
+        wavePlate.setTranslateX(waveX);
+        wavePlate.setTranslateY(8);
+        getGameScene().addUINode(wavePlate);
+
+        Text waveCaption = new Text("WAVE");
+        waveCaption.setFont(Font.font("Monospace", FontWeight.BOLD, 8));
+        waveCaption.setFill(Color.rgb(255, 210, 70));
+        waveCaption.setTranslateX(waveX + 8);
+        waveCaption.setTranslateY(19);
+        getGameScene().addUINode(waveCaption);
+
         Text levelLabel = new Text();
-        levelLabel.setFont(Font.font("Monospace", 11));
-        levelLabel.setFill(Color.LIGHTGRAY);
-        levelLabel.setTranslateX(railWidth + 10);
-        levelLabel.setTranslateY(hudY + 18);
-        levelLabel.textProperty().bind(getip(GameVars.LEVEL).asString("WAVE %d"));
+        levelLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
+        levelLabel.setFill(Color.rgb(255, 230, 120));
+        levelLabel.setTranslateX(waveX + 44);
+        levelLabel.setTranslateY(31);
+        levelLabel.textProperty().bind(getip(GameVars.LEVEL).asString("%02d"));
+        DropShadow waveGlow = new DropShadow(10, Color.GOLD);
+        waveGlow.setSpread(0.2);
+        levelLabel.setEffect(waveGlow);
         getGameScene().addUINode(levelLabel);
         
         Text livesLabel = new Text();

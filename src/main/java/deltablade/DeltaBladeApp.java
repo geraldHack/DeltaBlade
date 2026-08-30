@@ -10,8 +10,12 @@ import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
 import javafx.animation.Animation;
+import javafx.animation.FadeTransition;
+import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
+import javafx.animation.ParallelTransition;
+import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
 import javafx.scene.Group;
 import javafx.scene.Node;
@@ -23,6 +27,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -377,16 +382,58 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void spawnStars() {
+        spawnNebulae();
+        spawnDistantPlanet();
+        
         for (int i = 0; i < 80; i++) {
             double x = random.nextDouble() * getAppWidth();
             double y = random.nextDouble() * getAppHeight();
-            double size = random.nextDouble() * 2 + 1;
-            double opacity = 0.3 + random.nextDouble() * 0.7;
+            double size = 1.0 + random.nextDouble() * 1.2;
+            double opacity = 0.25 + random.nextDouble() * 0.35;
+            double scrollSpeed = 15 + random.nextDouble() * 10;
             
-            spawn("star", new com.almasb.fxgl.entity.SpawnData(x, y)
+            spawn("scrollingStar", new com.almasb.fxgl.entity.SpawnData(x, y)
                     .put("size", size)
-                    .put("opacity", opacity));
+                    .put("opacity", opacity)
+                    .put("scrollSpeed", scrollSpeed)
+                    .put("isNear", false));
         }
+        
+        for (int i = 0; i < 40; i++) {
+            double x = random.nextDouble() * getAppWidth();
+            double y = random.nextDouble() * getAppHeight();
+            double size = 1.5 + random.nextDouble() * 2.0;
+            double opacity = 0.5 + random.nextDouble() * 0.5;
+            double scrollSpeed = 35 + random.nextDouble() * 25;
+            
+            spawn("scrollingStar", new com.almasb.fxgl.entity.SpawnData(x, y)
+                    .put("size", size)
+                    .put("opacity", opacity)
+                    .put("scrollSpeed", scrollSpeed)
+                    .put("isNear", true));
+        }
+    }
+    
+    private void spawnNebulae() {
+        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(150, 200)
+                .put("radius", 180.0)
+                .put("color", Color.rgb(60, 30, 90))
+                .put("opacity", 0.25));
+        
+        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(600, 350)
+                .put("radius", 220.0)
+                .put("color", Color.rgb(30, 60, 80))
+                .put("opacity", 0.2));
+        
+        spawn("nebula", new com.almasb.fxgl.entity.SpawnData(400, 500)
+                .put("radius", 150.0)
+                .put("color", Color.rgb(80, 40, 70))
+                .put("opacity", 0.18));
+    }
+    
+    private void spawnDistantPlanet() {
+        spawn("distantPlanet", new com.almasb.fxgl.entity.SpawnData(680, 80)
+                .put("radius", 45.0));
     }
     
     private void spawnPlayer() {
@@ -462,9 +509,92 @@ public class DeltaBladeApp extends GameApplication {
         inc(GameVars.ACTIVE_BULLETS, 1);
     }
 
-    private void spawnExplosion(double x, double y, String size) {
-        spawn("explosion", new com.almasb.fxgl.entity.SpawnData(x, y)
+    private void spawnExplosion(double centerX, double centerY, String size) {
+        spawn("explosion", new com.almasb.fxgl.entity.SpawnData(centerX, centerY)
                 .put("size", size));
+        
+        if ("ship".equals(size) || "big".equals(size)) {
+            spawnShockwaveRing(centerX, centerY, size);
+            triggerScreenShake(size);
+        }
+        
+        if ("big".equals(size)) {
+            spawnFlashOverlay();
+        }
+    }
+    
+    private void spawnShockwaveRing(double centerX, double centerY, String size) {
+        double maxRadius = "big".equals(size) ? 160 : 110;
+        double duration = "big".equals(size) ? 0.35 : 0.25;
+        
+        Circle ring = new Circle(10);
+        ring.setFill(Color.TRANSPARENT);
+        ring.setStroke(Color.rgb(255, 200, 100, 0.9));
+        ring.setStrokeWidth(4);
+        ring.setCenterX(centerX);
+        ring.setCenterY(centerY);
+        
+        getGameScene().addUINode(ring);
+        
+        ScaleTransition scale = new ScaleTransition(Duration.seconds(duration), ring);
+        scale.setFromX(1.0);
+        scale.setFromY(1.0);
+        scale.setToX(maxRadius / 10.0);
+        scale.setToY(maxRadius / 10.0);
+        scale.setInterpolator(Interpolator.EASE_OUT);
+        
+        FadeTransition fade = new FadeTransition(Duration.seconds(duration), ring);
+        fade.setFromValue(0.9);
+        fade.setToValue(0.0);
+        
+        Timeline strokeFade = new Timeline(
+            new KeyFrame(Duration.ZERO, new KeyValue(ring.strokeWidthProperty(), 4)),
+            new KeyFrame(Duration.seconds(duration), new KeyValue(ring.strokeWidthProperty(), 1))
+        );
+        
+        ParallelTransition combo = new ParallelTransition(scale, fade, strokeFade);
+        combo.setOnFinished(e -> getGameScene().removeUINode(ring));
+        combo.play();
+    }
+    
+    private void triggerScreenShake(String size) {
+        double intensity = "big".equals(size) ? 14 : 8;
+        double shakeDuration = 0.2;
+        int shakeSteps = 6;
+        double stepDuration = shakeDuration / shakeSteps;
+        
+        Node root = getGameScene().getRoot();
+        double originalX = root.getTranslateX();
+        double originalY = root.getTranslateY();
+        
+        Timeline shake = new Timeline();
+        for (int i = 0; i < shakeSteps; i++) {
+            double offsetX = (random.nextDouble() - 0.5) * 2 * intensity * (1.0 - (double) i / shakeSteps);
+            double offsetY = (random.nextDouble() - 0.5) * 2 * intensity * (1.0 - (double) i / shakeSteps);
+            shake.getKeyFrames().add(new KeyFrame(Duration.seconds(i * stepDuration),
+                new KeyValue(root.translateXProperty(), originalX + offsetX),
+                new KeyValue(root.translateYProperty(), originalY + offsetY)
+            ));
+        }
+        shake.getKeyFrames().add(new KeyFrame(Duration.seconds(shakeDuration),
+            new KeyValue(root.translateXProperty(), originalX),
+            new KeyValue(root.translateYProperty(), originalY)
+        ));
+        shake.play();
+    }
+    
+    private void spawnFlashOverlay() {
+        Rectangle flash = new Rectangle(getAppWidth(), getAppHeight());
+        flash.setFill(Color.rgb(255, 220, 180, 0.12));
+        flash.setMouseTransparent(true);
+        
+        getGameScene().addUINode(flash);
+        
+        FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
+        fadeOut.setFromValue(1.0);
+        fadeOut.setToValue(0.0);
+        fadeOut.setOnFinished(e -> getGameScene().removeUINode(flash));
+        fadeOut.play();
     }
     
     public void spawnEnemyBullet(double x, double y) {
@@ -489,8 +619,8 @@ public class DeltaBladeApp extends GameApplication {
             EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
             ec.hit();
 
-            double hitX = bullet.getX() + bullet.getWidth() / 2 - 32;
-            double hitY = bullet.getY() + bullet.getHeight() / 2 - 32;
+            double hitX = bullet.getX() + bullet.getWidth() / 2;
+            double hitY = bullet.getY() + bullet.getHeight() / 2;
             spawnExplosion(hitX, hitY, "hit");
             
             if (ec.isDead()) {
@@ -499,8 +629,8 @@ public class DeltaBladeApp extends GameApplication {
                 
                 waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
                 
-                double deathX = enemy.getX() + enemy.getWidth() / 2 - 32;
-                double deathY = enemy.getY() + enemy.getHeight() / 2 - 32;
+                double deathX = enemy.getX() + enemy.getWidth() / 2;
+                double deathY = enemy.getY() + enemy.getHeight() / 2;
                 
                 boolean isBoss = ec.isBoss();
                 String explosionSize = (isBoss || ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
@@ -556,8 +686,8 @@ public class DeltaBladeApp extends GameApplication {
         set(GameVars.AUTOFIRE, false);
 
         if (player != null) {
-            double explosionX = player.getX() + player.getWidth() / 2 - 32;
-            double explosionY = player.getY() + player.getHeight() / 2 - 32;
+            double explosionX = player.getX() + player.getWidth() / 2;
+            double explosionY = player.getY() + player.getHeight() / 2;
             spawnExplosion(explosionX, explosionY, "ship");
         }
         

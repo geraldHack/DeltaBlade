@@ -17,6 +17,7 @@ import javafx.animation.KeyValue;
 import javafx.animation.ParallelTransition;
 import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -221,35 +222,37 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void setInitialWindowSize() {
-        javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
-        double screenHeight = screen.getVisualBounds().getHeight();
-        double screenWidth = screen.getVisualBounds().getWidth();
-        
-        double margin = 120;
-        double availableHeight = screenHeight - margin;
-        double availableWidth = screenWidth - margin;
-        
-        double maxScaleByHeight = availableHeight / 600.0;
-        double maxScaleByWidth = availableWidth / 800.0;
-        double maxScale = Math.min(maxScaleByHeight, maxScaleByWidth);
-        
-        int integerScale = (int) maxScale;
-        double scale;
-        if (integerScale >= 2) {
-            scale = integerScale;
-        } else if (maxScale >= 1.5) {
-            scale = Math.floor(maxScale * 2) / 2;
-        } else {
-            scale = Math.max(1.0, maxScale);
-        }
-        
-        double windowWidth = 800 * scale;
-        double windowHeight = 600 * scale;
-        
-        javafx.stage.Stage stage = getPrimaryStage();
-        stage.setWidth(windowWidth);
-        stage.setHeight(windowHeight);
-        stage.centerOnScreen();
+        Platform.runLater(() -> {
+            javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
+            double screenHeight = screen.getVisualBounds().getHeight();
+            double screenWidth = screen.getVisualBounds().getWidth();
+            
+            double margin = 120;
+            double availableHeight = screenHeight - margin;
+            double availableWidth = screenWidth - margin;
+            
+            double maxScaleByHeight = availableHeight / 600.0;
+            double maxScaleByWidth = availableWidth / 800.0;
+            double maxScale = Math.min(maxScaleByHeight, maxScaleByWidth);
+            
+            int integerScale = (int) maxScale;
+            double scale;
+            if (integerScale >= 2) {
+                scale = integerScale;
+            } else if (maxScale >= 1.5) {
+                scale = Math.floor(maxScale * 2) / 2;
+            } else {
+                scale = Math.max(1.0, maxScale);
+            }
+            
+            double windowWidth = 800 * scale;
+            double windowHeight = 600 * scale;
+            
+            javafx.stage.Stage stage = getPrimaryStage();
+            stage.setWidth(windowWidth);
+            stage.setHeight(windowHeight);
+            stage.centerOnScreen();
+        });
     }
     
     private void showTitleScreen() {

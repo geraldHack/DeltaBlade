@@ -56,6 +56,12 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
+        // TODO: Add Gerald's real blue ship PNGs (384x48, 8 frames each):
+        //   - player_blue_thruster.png (2508 bytes)
+        //   - player_blue_bank.png (3759 bytes)
+        //   - player_blue_bowwave.png (4603 bytes)
+        // Add to src/main/resources/assets/textures/ AND embed in EmbeddedTextures.TEXTURE_DATA
+        // Animation infrastructure is ready - just needs the lossless PNG bytes.
         Image thrusterSheet = EmbeddedTextures.getImage("player_blue_thruster.png", 384, 48);
         Image bankSheet = EmbeddedTextures.getImage("player_blue_bank.png", 384, 48);
         Image bowwaveSheet = EmbeddedTextures.getImage("player_blue_bowwave.png", 384, 48);

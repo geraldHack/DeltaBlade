@@ -269,34 +269,62 @@ public class DeltaBladeFactory implements EntityFactory {
     /**
      * Spawns an explosion effect at the given position.
      * Data keys:
-     *   - "size": String - "hit" (small), "ship" (medium), or "big" (boss)
+     *   - "size": String - "hit" (small sparks), "ship" (medium), or "big" (boss, 2-row grid)
      */
     @Spawns("explosion")
     public Entity newExplosion(SpawnData data) {
         String size = data.hasKey("size") ? data.<String>get("size") : "ship";
 
-        String textureName = switch (size) {
-            case "hit" -> "explosion_hit.png";
-            case "big" -> "explosion_big.png";
-            default -> "explosion_ship.png";
-        };
+        String textureName;
+        int frameCount;
+        int frameWidth;
+        int frameHeight;
+        int columns;
+        int sheetWidth;
+        int sheetHeight;
+        double duration;
 
-        double duration = switch (size) {
-            case "hit" -> 0.4;
-            case "big" -> 0.8;
-            default -> 0.6;
-        };
+        switch (size) {
+            case "hit" -> {
+                textureName = "explosion_hit.png";
+                frameCount = 6;
+                frameWidth = 32;
+                frameHeight = 32;
+                columns = 6;
+                sheetWidth = 192;
+                sheetHeight = 32;
+                duration = 0.2;
+            }
+            case "big" -> {
+                textureName = "explosion_big.png";
+                frameCount = 10;
+                frameWidth = 64;
+                frameHeight = 64;
+                columns = 8;
+                sheetWidth = 512;
+                sheetHeight = 128;
+                duration = 0.7;
+            }
+            default -> {
+                textureName = "explosion_ship.png";
+                frameCount = 8;
+                frameWidth = 64;
+                frameHeight = 64;
+                columns = 8;
+                sheetWidth = 512;
+                sheetHeight = 64;
+                duration = 0.5;
+            }
+        }
 
-        int frameSize = 64;
-        int frameCount = 8;
-
-        Image spriteSheet = EmbeddedTextures.getImage(textureName, frameSize * frameCount, frameSize);
+        Image spriteSheet = EmbeddedTextures.getImage(textureName, sheetWidth, sheetHeight);
         if (spriteSheet == null || spriteSheet.isError()) {
+            System.err.println("Failed to load explosion texture: " + textureName);
             return FXGL.entityBuilder(data).build();
         }
 
         ExplosionComponent explosionComp = new ExplosionComponent(
-                spriteSheet, frameCount, frameSize, frameSize, duration);
+                spriteSheet, frameCount, frameWidth, frameHeight, columns, duration);
 
         return FXGL.entityBuilder(data)
                 .view(explosionComp.getView())

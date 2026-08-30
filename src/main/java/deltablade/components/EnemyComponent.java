@@ -11,7 +11,8 @@ public class EnemyComponent extends Component {
     public enum EnemyType {
         BASIC(1, 100, 55, 0.015),
         FAST(1, 150, 80, 0.02),
-        TOUGH(3, 300, 45, 0.025);
+        TOUGH(3, 300, 45, 0.025),
+        BOSS(10, 1000, 35, 0.04);
         
         public final int health;
         public final int scoreValue;
@@ -29,7 +30,9 @@ public class EnemyComponent extends Component {
     public enum State {
         ENTERING,
         FORMATION,
-        DIVING
+        DIVING,
+        BOSS_HOVER,
+        BOSS_DIVE
     }
     
     private EnemyType type;
@@ -57,6 +60,13 @@ public class EnemyComponent extends Component {
     private double formationHoldTime = 0;
     private double minFormationTime = 2.0;
     
+    private boolean isBoss = false;
+    private double bossSwayPhase = 0;
+    private double bossDiveTimer = 0;
+    private double bossReturnY = 0;
+    private boolean bossDiving = false;
+    private boolean isKamikaze = false;
+    
     private static final Random random = new Random();
     
     public EnemyComponent(EnemyType type, int level) {
@@ -68,6 +78,24 @@ public class EnemyComponent extends Component {
         this.hoverPhase = random.nextDouble() * Math.PI * 2;
         this.diveSpeed = 90 + level * 10;
         this.minFormationTime = 3.0 + random.nextDouble() * 2.0;
+        
+        if (type == EnemyType.BOSS) {
+            this.isBoss = true;
+            int cycle = (level - 1) / 4 + 1;
+            this.health = deltablade.GameVars.BOSS_BASE_HEALTH + deltablade.GameVars.BOSS_HEALTH_PER_CYCLE * cycle;
+            this.speedX = type.speed * (random.nextBoolean() ? 1 : -1);
+        }
+    }
+    
+    public void setKamikaze(boolean kamikaze) {
+        this.isKamikaze = kamikaze;
+        if (kamikaze) {
+            this.diveSpeed *= 1.3;
+        }
+    }
+    
+    public boolean isBoss() {
+        return isBoss;
     }
     
     public void setEntryData(double targetX, double targetY, WaveManager.EntryPath path, int squadId) {
@@ -104,6 +132,8 @@ public class EnemyComponent extends Component {
             case ENTERING -> updateEntering(tpf);
             case FORMATION -> updateFormation(tpf);
             case DIVING -> updateDiving(tpf);
+            case BOSS_HOVER -> updateBossHover(tpf);
+            case BOSS_DIVE -> updateBossDive(tpf);
         }
         
         if (state != State.ENTERING) {
@@ -124,7 +154,15 @@ public class EnemyComponent extends Component {
         
         if (dist < 5 || entryProgress >= 1.0) {
             entity.setPosition(targetX, targetY);
-            state = State.FORMATION;
+            if (isBoss) {
+                state = State.BOSS_HOVER;
+                baseY = targetY;
+                bossReturnY = targetY;
+            } else if (isKamikaze) {
+                state = State.DIVING;
+            } else {
+                state = State.FORMATION;
+            }
             baseY = targetY;
             formationHoldTime = 0;
             
@@ -202,13 +240,63 @@ public class EnemyComponent extends Component {
     
     private void updateFiring(double tpf) {
         fireTimer += tpf;
-        if (fireTimer > 0.5 && random.nextDouble() < type.fireRate * tpf * 60) {
+        double effectiveFireRate = isBoss ? type.fireRate * 1.5 : type.fireRate;
+        if (fireTimer > 0.5 && random.nextDouble() < effectiveFireRate * tpf * 60) {
             fireTimer = 0;
             FXGL.<deltablade.DeltaBladeApp>getAppCast().spawnEnemyBullet(
                 entity.getX() + entity.getWidth() / 2,
                 entity.getBottomY()
             );
         }
+    }
+    
+    private void updateBossHover(double tpf) {
+        bossSwayPhase += tpf * 1.5;
+        bossDiveTimer += tpf;
+        
+        double swayX = Math.sin(bossSwayPhase) * 80;
+        double swayY = Math.sin(bossSwayPhase * 0.7) * 20;
+        
+        double centerX = (FXGL.getAppWidth() - entity.getWidth()) / 2;
+        double targetX = centerX + swayX;
+        
+        double dx = targetX - entity.getX();
+        entity.translateX(dx * tpf * 2);
+        
+        entity.setY(bossReturnY + swayY);
+        
+        double minX = deltablade.GameVars.RAIL_WIDTH;
+        double maxX = FXGL.getAppWidth() - entity.getWidth() - deltablade.GameVars.RAIL_WIDTH;
+        if (entity.getX() < minX) entity.setX(minX);
+        if (entity.getX() > maxX) entity.setX(maxX);
+        
+        if (bossDiveTimer > 4.0 && random.nextDouble() < 0.02) {
+            bossDiveTimer = 0;
+            state = State.BOSS_DIVE;
+            bossDiving = true;
+        }
+    }
+    
+    private void updateBossDive(double tpf) {
+        double maxDiveY = FXGL.getAppHeight() * 0.55;
+        
+        if (bossDiving) {
+            entity.translateY(diveSpeed * tpf);
+            if (entity.getY() >= maxDiveY) {
+                bossDiving = false;
+            }
+        } else {
+            entity.translateY(-diveSpeed * 0.7 * tpf);
+            if (entity.getY() <= bossReturnY) {
+                entity.setY(bossReturnY);
+                state = State.BOSS_HOVER;
+            }
+        }
+        
+        double minX = deltablade.GameVars.RAIL_WIDTH;
+        double maxX = FXGL.getAppWidth() - entity.getWidth() - deltablade.GameVars.RAIL_WIDTH;
+        if (entity.getX() < minX) entity.setX(minX);
+        if (entity.getX() > maxX) entity.setX(maxX);
     }
     
     private void notifySettled() {

@@ -20,7 +20,23 @@ import static com.almasb.fxgl.dsl.FXGL.*;
 
 public class WaveManager {
     
+    public enum WaveType {
+        FIGHTERS,
+        MIXED,
+        BOSS,
+        KAMIKAZE
+    }
+    
+    public enum FormationType {
+        ROW,
+        V_FORMATION,
+        DIAMOND,
+        TWO_COLUMNS,
+        STAGGERED
+    }
+    
     private int currentLevel;
+    private WaveType currentWaveType;
     private List<Squad> activeSquads = new ArrayList<>();
     private List<Point2D> formationSlots = new ArrayList<>();
     private int totalEnemiesInWave = 0;
@@ -76,35 +92,172 @@ public class WaveManager {
         this.squadSpawnTimer = 0;
         this.initialDelayPassed = false;
         
-        // Wave 1: 6 enemies, +2 per wave, max 18 (3 rows × 6 cols)
-        int targetEnemies = Math.min(6 + (level - 1) * 2, 18);
+        int cycleSlot = ((level - 1) % 4) + 1;
+        currentWaveType = switch (cycleSlot) {
+            case 1 -> WaveType.FIGHTERS;
+            case 2 -> WaveType.MIXED;
+            case 3 -> WaveType.BOSS;
+            case 4 -> WaveType.KAMIKAZE;
+            default -> WaveType.FIGHTERS;
+        };
         
-        // Calculate formation dimensions to fit target enemies
-        int cols = Math.min(6, targetEnemies);
-        int rows = (int) Math.ceil((double) targetEnemies / cols);
-        rows = Math.min(rows, 3);
-        
-        double spacingX = getAppWidth() / (cols + 1.0);
-        double spacingY = 45;
-        double startY = 60;
-        
-        int slotsCreated = 0;
-        for (int row = 0; row < rows && slotsCreated < targetEnemies; row++) {
-            for (int col = 0; col < cols && slotsCreated < targetEnemies; col++) {
-                double x = spacingX * (col + 1) - 15;
-                double y = startY + row * spacingY;
-                formationSlots.add(new Point2D(x, y));
-                slotsCreated++;
-            }
+        switch (currentWaveType) {
+            case FIGHTERS -> setupFightersWave(level);
+            case MIXED -> setupMixedWave(level);
+            case BOSS -> setupBossWave(level);
+            case KAMIKAZE -> setupKamikazeWave(level);
         }
         
-        totalEnemiesInWave = formationSlots.size();
-        
-        // Squads: wave 1-2 = 2 squads, then +1 per 2 levels, max based on enemies
-        squadsToSpawn = Math.min(2 + (level - 1) / 2, (totalEnemiesInWave + 2) / 3);
-        squadsToSpawn = Math.max(squadsToSpawn, 1);
-        
         set(GameVars.ENEMIES_REMAINING, totalEnemiesInWave);
+        set(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 0);
+    }
+    
+    private void setupFightersWave(int level) {
+        int cycle = (level - 1) / 4 + 1;
+        int baseCount = level == 1 ? 6 : Math.min(8 + cycle * 2, 14);
+        
+        FormationType formation = random.nextBoolean() ? FormationType.ROW : FormationType.V_FORMATION;
+        generateFormationSlots(formation, baseCount);
+        
+        totalEnemiesInWave = formationSlots.size();
+        squadsToSpawn = Math.min(2 + cycle / 2, 3);
+    }
+    
+    private void setupMixedWave(int level) {
+        int cycle = (level - 1) / 4 + 1;
+        int baseCount = Math.min(10 + cycle * 2, 16);
+        
+        FormationType formation = switch (random.nextInt(3)) {
+            case 0 -> FormationType.DIAMOND;
+            case 1 -> FormationType.TWO_COLUMNS;
+            default -> FormationType.STAGGERED;
+        };
+        generateFormationSlots(formation, baseCount);
+        
+        totalEnemiesInWave = formationSlots.size();
+        squadsToSpawn = Math.min(3 + cycle / 2, 4);
+    }
+    
+    private void setupBossWave(int level) {
+        int escortCount = 2 + Math.min((level - 1) / 4, 2);
+        
+        double centerX = getAppWidth() / 2.0 - 40;
+        formationSlots.add(new Point2D(centerX, 80));
+        
+        double spacing = 60;
+        for (int i = 0; i < escortCount; i++) {
+            double offset = (i % 2 == 0 ? -1 : 1) * spacing * ((i / 2) + 1);
+            formationSlots.add(new Point2D(centerX + offset, 140 + (i % 2) * 30));
+        }
+        
+        totalEnemiesInWave = 1 + escortCount;
+        squadsToSpawn = 1;
+    }
+    
+    private void setupKamikazeWave(int level) {
+        int cycle = (level - 1) / 4 + 1;
+        int totalKamikaze = Math.min(8 + cycle * 2, 14);
+        
+        for (int i = 0; i < totalKamikaze; i++) {
+            double x = GameVars.RAIL_WIDTH + 50 + random.nextDouble() * (getAppWidth() - 2 * GameVars.RAIL_WIDTH - 100);
+            double y = 60 + (i % 3) * 40;
+            formationSlots.add(new Point2D(x, y));
+        }
+        
+        totalEnemiesInWave = totalKamikaze;
+        squadsToSpawn = 2 + random.nextInt(2);
+        squadSpawnDelay = 1.5;
+    }
+    
+    private void generateFormationSlots(FormationType type, int targetCount) {
+        double playableLeft = GameVars.RAIL_WIDTH + 30;
+        double playableRight = getAppWidth() - GameVars.RAIL_WIDTH - 30;
+        double playableWidth = playableRight - playableLeft;
+        
+        switch (type) {
+            case ROW -> {
+                int perRow = Math.min(6, targetCount);
+                int rows = (int) Math.ceil((double) targetCount / perRow);
+                double spacingX = playableWidth / (perRow + 1);
+                double spacingY = 45;
+                
+                int created = 0;
+                for (int row = 0; row < rows && created < targetCount; row++) {
+                    int inThisRow = Math.min(perRow, targetCount - created);
+                    double rowStartX = playableLeft + (playableWidth - (inThisRow - 1) * spacingX) / 2;
+                    for (int col = 0; col < inThisRow && created < targetCount; col++) {
+                        formationSlots.add(new Point2D(rowStartX + col * spacingX, 60 + row * spacingY));
+                        created++;
+                    }
+                }
+            }
+            case V_FORMATION -> {
+                double centerX = getAppWidth() / 2.0;
+                double spacingX = 50;
+                double spacingY = 35;
+                
+                int created = 0;
+                int row = 0;
+                while (created < targetCount) {
+                    int inThisRow = Math.min(row + 1, targetCount - created);
+                    for (int i = 0; i < inThisRow && created < targetCount; i++) {
+                        double offsetX = (i - (inThisRow - 1) / 2.0) * spacingX;
+                        formationSlots.add(new Point2D(centerX + offsetX - 20, 60 + row * spacingY));
+                        created++;
+                    }
+                    row++;
+                    if (row > 5) break;
+                }
+            }
+            case DIAMOND -> {
+                double centerX = getAppWidth() / 2.0 - 20;
+                double spacingX = 55;
+                double spacingY = 40;
+                
+                int[] rowCounts = {1, 2, 3, 2, 1};
+                int created = 0;
+                for (int row = 0; row < rowCounts.length && created < targetCount; row++) {
+                    int inThisRow = Math.min(rowCounts[row], targetCount - created);
+                    for (int i = 0; i < inThisRow && created < targetCount; i++) {
+                        double offsetX = (i - (inThisRow - 1) / 2.0) * spacingX;
+                        formationSlots.add(new Point2D(centerX + offsetX, 60 + row * spacingY));
+                        created++;
+                    }
+                }
+            }
+            case TWO_COLUMNS -> {
+                double leftX = playableLeft + playableWidth * 0.25;
+                double rightX = playableLeft + playableWidth * 0.75;
+                double spacingY = 45;
+                
+                int perColumn = (targetCount + 1) / 2;
+                int created = 0;
+                for (int i = 0; i < perColumn && created < targetCount; i++) {
+                    formationSlots.add(new Point2D(leftX, 60 + i * spacingY));
+                    created++;
+                    if (created < targetCount) {
+                        formationSlots.add(new Point2D(rightX, 60 + i * spacingY));
+                        created++;
+                    }
+                }
+            }
+            case STAGGERED -> {
+                int perRow = 4;
+                int rows = (int) Math.ceil((double) targetCount / perRow);
+                double spacingX = playableWidth / (perRow + 1);
+                double spacingY = 50;
+                
+                int created = 0;
+                for (int row = 0; row < rows && created < targetCount; row++) {
+                    double rowOffset = (row % 2 == 1) ? spacingX / 2 : 0;
+                    int inThisRow = Math.min(perRow, targetCount - created);
+                    for (int col = 0; col < inThisRow && created < targetCount; col++) {
+                        formationSlots.add(new Point2D(playableLeft + spacingX * (col + 1) + rowOffset - 20, 60 + row * spacingY));
+                        created++;
+                    }
+                }
+            }
+        }
     }
     
     public void update(double tpf) {
@@ -135,10 +288,15 @@ public class WaveManager {
         squadsToSpawn--;
         
         int remaining = totalEnemiesInWave - enemiesSpawned;
-        // Squad size: 3-5 enemies, distribute evenly across remaining squads
-        int baseSize = Math.max(3, remaining / Math.max(squadsToSpawn + 1, 1));
-        int squadSize = Math.min(baseSize, 5);
-        squadSize = Math.min(squadSize, remaining);
+        int squadSize;
+        
+        if (currentWaveType == WaveType.BOSS && activeSquads.isEmpty()) {
+            squadSize = remaining;
+        } else {
+            int baseSize = Math.max(3, remaining / Math.max(squadsToSpawn + 1, 1));
+            squadSize = Math.min(baseSize, 5);
+            squadSize = Math.min(squadSize, remaining);
+        }
         
         if (squadSize <= 0) return;
         
@@ -150,28 +308,35 @@ public class WaveManager {
         for (int i = 0; i < squadSize && enemiesSpawned < totalEnemiesInWave; i++) {
             Point2D targetSlot = formationSlots.get(enemiesSpawned);
             
-            EnemyComponent.EnemyType type = determineEnemyType(enemiesSpawned / 8, currentLevel);
+            EnemyComponent.EnemyType type = determineEnemyType(enemiesSpawned);
             
             final int index = i;
             final int squadIdFinal = squad.id;
+            final EnemyComponent.EnemyType finalType = type;
             
             Runnable spawnEnemy = () -> {
-                Entity enemy = spawn("enemy", new SpawnData(path.startX, path.startY)
-                        .put("enemyType", type)
+                SpawnData spawnData = new SpawnData(path.startX, path.startY)
+                        .put("enemyType", finalType)
                         .put("level", currentLevel)
                         .put("targetX", targetSlot.getX())
                         .put("targetY", targetSlot.getY())
                         .put("entryPath", path)
                         .put("squadId", squadIdFinal)
-                        .put("entering", true));
+                        .put("entering", true);
                 
+                if (currentWaveType == WaveType.KAMIKAZE) {
+                    spawnData.put("kamikaze", true);
+                }
+                
+                Entity enemy = spawn("enemy", spawnData);
                 squad.addEnemy(enemy);
             };
             
             if (index == 0) {
                 spawnEnemy.run();
             } else {
-                runOnce(spawnEnemy, javafx.util.Duration.seconds(index * 0.25));
+                double delay = currentWaveType == WaveType.KAMIKAZE ? index * 0.15 : index * 0.25;
+                runOnce(spawnEnemy, javafx.util.Duration.seconds(delay));
             }
             
             enemiesSpawned++;
@@ -179,25 +344,58 @@ public class WaveManager {
     }
     
     private EntryPath generateEntryPath() {
-        int pathType = random.nextInt(4);
-        
-        return switch (pathType) {
-            case 0 -> new EntryPath(-50, 100, EntryPath.Type.FROM_LEFT_CURVE);
-            case 1 -> new EntryPath(getAppWidth() + 50, 100, EntryPath.Type.FROM_RIGHT_CURVE);
-            case 2 -> new EntryPath(getAppWidth() / 2, -50, EntryPath.Type.FROM_TOP_SPLIT);
-            default -> new EntryPath(random.nextBoolean() ? -50 : getAppWidth() + 50, 
-                                     50 + random.nextDouble() * 100, 
-                                     EntryPath.Type.FROM_SIDE_SWOOP);
+        return switch (currentWaveType) {
+            case FIGHTERS -> {
+                boolean useLeft = random.nextBoolean();
+                yield useLeft 
+                    ? new EntryPath(-50, 100, EntryPath.Type.FROM_LEFT_CURVE)
+                    : new EntryPath(getAppWidth() + 50, 100, EntryPath.Type.FROM_RIGHT_CURVE);
+            }
+            case MIXED -> {
+                int pathType = random.nextInt(2);
+                yield pathType == 0
+                    ? new EntryPath(getAppWidth() / 2, -50, EntryPath.Type.FROM_TOP_SPLIT)
+                    : new EntryPath(random.nextBoolean() ? -50 : getAppWidth() + 50, 80, EntryPath.Type.FROM_SIDE_SWOOP);
+            }
+            case BOSS -> new EntryPath(getAppWidth() / 2, -80, EntryPath.Type.FROM_TOP_SPLIT);
+            case KAMIKAZE -> {
+                boolean fromLeft = random.nextBoolean();
+                yield fromLeft
+                    ? new EntryPath(-50, 50 + random.nextDouble() * 100, EntryPath.Type.FROM_LEFT_CURVE)
+                    : new EntryPath(getAppWidth() + 50, 50 + random.nextDouble() * 100, EntryPath.Type.FROM_RIGHT_CURVE);
+            }
         };
     }
     
-    private EnemyComponent.EnemyType determineEnemyType(int row, int level) {
-        if (level >= 3 && row == 0 && random.nextDouble() < 0.3) {
+    private EnemyComponent.EnemyType determineEnemyType(int slotIndex) {
+        if (currentWaveType == WaveType.BOSS && slotIndex == 0) {
+            return EnemyComponent.EnemyType.BOSS;
+        }
+        
+        if (currentWaveType == WaveType.BOSS) {
+            return random.nextDouble() < 0.3 ? EnemyComponent.EnemyType.FAST : EnemyComponent.EnemyType.BASIC;
+        }
+        
+        if (currentWaveType == WaveType.KAMIKAZE) {
+            return random.nextDouble() < 0.4 ? EnemyComponent.EnemyType.FAST : EnemyComponent.EnemyType.BASIC;
+        }
+        
+        if (currentWaveType == WaveType.MIXED) {
+            double roll = random.nextDouble();
+            if (roll < 0.15 + currentLevel * 0.02) {
+                return EnemyComponent.EnemyType.TOUGH;
+            } else if (roll < 0.35 + currentLevel * 0.03) {
+                return EnemyComponent.EnemyType.FAST;
+            }
+        }
+        
+        if (currentLevel >= 3 && slotIndex < 3 && random.nextDouble() < 0.2) {
             return EnemyComponent.EnemyType.TOUGH;
         }
-        if (level >= 2 && random.nextDouble() < 0.15 + level * 0.05) {
+        if (currentLevel >= 2 && random.nextDouble() < 0.15 + currentLevel * 0.03) {
             return EnemyComponent.EnemyType.FAST;
         }
+        
         return EnemyComponent.EnemyType.BASIC;
     }
     
@@ -254,6 +452,10 @@ public class WaveManager {
     
     public boolean isWaveComplete() {
         return geti(GameVars.ENEMIES_REMAINING) <= 0;
+    }
+    
+    public WaveType getCurrentWaveType() {
+        return currentWaveType;
     }
     
     public static class EntryPath {

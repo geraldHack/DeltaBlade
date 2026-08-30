@@ -271,10 +271,13 @@ public class WaveManager {
             return;
         }
         
-        if (enemiesSpawned < totalEnemiesInWave && squadsToSpawn > 0) {
+        if (enemiesSpawned < totalEnemiesInWave) {
             squadSpawnTimer += tpf;
             if (squadSpawnTimer >= squadSpawnDelay) {
                 squadSpawnTimer = 0;
+                if (squadsToSpawn <= 0) {
+                    squadsToSpawn = 1;
+                }
                 spawnNextSquad();
             }
         }

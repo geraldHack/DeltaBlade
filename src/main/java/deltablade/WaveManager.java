@@ -96,8 +96,8 @@ public class WaveManager {
         currentWaveType = switch (cycleSlot) {
             case 1 -> WaveType.FIGHTERS;
             case 2 -> WaveType.MIXED;
-            case 3 -> WaveType.KAMIKAZE;
-            case 4 -> WaveType.BOSS;
+            case 3 -> WaveType.BOSS;
+            case 4 -> WaveType.KAMIKAZE;
             default -> WaveType.FIGHTERS;
         };
         

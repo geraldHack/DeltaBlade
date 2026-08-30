@@ -152,7 +152,7 @@ public class EnemyComponent extends Component {
         double dy = targetY - currentY;
         double dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (dist < 5 || entryProgress >= 1.0) {
+        if (dist < 5 || (entryProgress >= 1.0 && dist < 30)) {
             entity.setPosition(targetX, targetY);
             if (isBoss) {
                 state = State.BOSS_HOVER;

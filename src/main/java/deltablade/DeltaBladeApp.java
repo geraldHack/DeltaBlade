@@ -996,11 +996,13 @@ public class DeltaBladeApp extends GameApplication {
             set(varName, 1);
             inc(GameVars.SCORE, 25);
             showBanner(String.valueOf(letter), LETTER_COLORS[letterIndex], 1.0);
+            SoundHelper.play("extra.wav");
             
             if (isExtraComplete()) {
                 inc(GameVars.LIVES, 1);
                 resetExtraLetters();
                 showExtraLifeFlash();
+                SoundHelper.play("extra_life.wav");
             }
         }
     }

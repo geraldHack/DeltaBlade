@@ -29,6 +29,7 @@ import javafx.scene.text.Text;
 public class DeltaBladeFactory implements EntityFactory {
 
     private static final int SHIP_SIZE = 48;
+    private static final int BOSS_SIZE = 80;
     private static final int BULLET_W = 12;
     private static final int BULLET_H = 20;
     private static final int PICKUP_SIZE = 28;
@@ -66,21 +67,30 @@ public class DeltaBladeFactory implements EntityFactory {
         EnemyComponent.EnemyType type = data.get("enemyType");
         int level = data.get("level");
 
+        boolean isBoss = (type == EnemyComponent.EnemyType.BOSS);
+        int size = isBoss ? BOSS_SIZE : SHIP_SIZE;
+
         String textureName = switch (type) {
             case FAST -> "enemy_fast.png";
             case TOUGH -> "enemy_tough.png";
+            case BOSS -> "enemy_tough.png";
             default -> "enemy_basic.png";
         };
 
         Color fallback = switch (type) {
             case FAST -> Color.LIME;
             case TOUGH -> Color.MEDIUMPURPLE;
+            case BOSS -> Color.DARKVIOLET;
             default -> Color.CRIMSON;
         };
 
-        Node view = safeTexture(textureName, SHIP_SIZE, SHIP_SIZE, fallback);
+        Node view = safeTexture(textureName, size, size, fallback);
 
         EnemyComponent enemyComponent = new EnemyComponent(type, level);
+
+        if (data.hasKey("kamikaze") && data.<Boolean>get("kamikaze")) {
+            enemyComponent.setKamikaze(true);
+        }
 
         if (data.hasKey("entering") && data.<Boolean>get("entering")) {
             double targetX = data.get("targetX");
@@ -143,6 +153,34 @@ public class DeltaBladeFactory implements EntityFactory {
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.EXTRA_AMMO))
+                .build();
+    }
+
+    @Spawns("autofirePickup")
+    public Entity newAutofirePickup(SpawnData data) {
+        Circle outer = new Circle(14);
+        outer.setFill(new RadialGradient(
+            0, 0, 0.3, 0.3, 0.9, true, CycleMethod.NO_CYCLE,
+            new Stop(0, Color.WHITE),
+            new Stop(0.4, Color.CYAN),
+            new Stop(0.8, Color.DARKCYAN),
+            new Stop(1, Color.rgb(0, 80, 100))
+        ));
+        
+        Text autoText = new Text("A");
+        autoText.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        autoText.setFill(Color.WHITE);
+        autoText.setTranslateX(-5);
+        autoText.setTranslateY(5);
+        
+        Group pickup = new Group(outer, autoText);
+        
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(pickup)
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.AUTOFIRE))
                 .build();
     }
 

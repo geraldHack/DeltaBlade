@@ -8,7 +8,8 @@ public class PickupComponent extends Component {
     public enum PickupType {
         WEAPON_UPGRADE,
         EXTRA_AMMO,
-        EXTRA_LIFE
+        EXTRA_LIFE,
+        AUTOFIRE
     }
     
     private PickupType type;

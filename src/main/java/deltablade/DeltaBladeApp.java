@@ -81,6 +81,8 @@ public class DeltaBladeApp extends GameApplication {
         vars.put(GameVars.EXTRA_T, 0);
         vars.put(GameVars.EXTRA_R, 0);
         vars.put(GameVars.EXTRA_A, 0);
+        vars.put(GameVars.AUTOFIRE, false);
+        vars.put(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 0);
     }
     
     @Override
@@ -131,8 +133,14 @@ public class DeltaBladeApp extends GameApplication {
         
         getInput().addAction(new UserAction("Fire") {
             @Override
-            protected void onAction() {
+            protected void onActionBegin() {
                 if (!gameOver) {
+                    fire();
+                }
+            }
+            @Override
+            protected void onAction() {
+                if (!gameOver && getb(GameVars.AUTOFIRE)) {
                     fire();
                 }
             }
@@ -140,8 +148,14 @@ public class DeltaBladeApp extends GameApplication {
         
         getInput().addAction(new UserAction("Fire X") {
             @Override
-            protected void onAction() {
+            protected void onActionBegin() {
                 if (!gameOver) {
+                    fire();
+                }
+            }
+            @Override
+            protected void onAction() {
+                if (!gameOver && getb(GameVars.AUTOFIRE)) {
                     fire();
                 }
             }
@@ -252,16 +266,16 @@ public class DeltaBladeApp extends GameApplication {
         
         startButton.setOnAction(e -> startActualGame());
         
-        Text controls = new Text("Controls: Arrow Keys / A,D = Move | Space / X = Fire");
+        Text controls = new Text("Pfeiltasten/A,D = Bewegen | SPACE/X = Feuer (tippen)");
         controls.setFont(Font.font("Monospace", 12));
         controls.setFill(Color.GRAY);
-        controls.setTranslateX(getAppWidth() / 2 - 200);
+        controls.setTranslateX(getAppWidth() / 2 - 190);
         controls.setTranslateY(450);
         
-        Text extraInfo = new Text("Collect E-X-T-R-A letters for extra life!");
+        Text extraInfo = new Text("B = Schüsse gleichzeitig | W = Waffe | EXTRA = Leben");
         extraInfo.setFont(Font.font("Monospace", 12));
         extraInfo.setFill(Color.GOLD);
-        extraInfo.setTranslateX(getAppWidth() / 2 - 140);
+        extraInfo.setTranslateX(getAppWidth() / 2 - 195);
         extraInfo.setTranslateY(480);
         
         titleScreenNodes.add(overlay);
@@ -346,6 +360,8 @@ public class DeltaBladeApp extends GameApplication {
         set(GameVars.ACTIVE_BULLETS, 0);
         set(GameVars.ENEMIES_REMAINING, 0);
         set(GameVars.MONEY, 0);
+        set(GameVars.AUTOFIRE, false);
+        set(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 0);
         for (String var : GameVars.EXTRA_VARS) {
             set(var, 0);
         }
@@ -385,11 +401,29 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void showWaveAnnouncement() {
-        showBanner("WAVE " + geti(GameVars.LEVEL), Color.YELLOW, 2.0);
+        WaveManager.WaveType waveType = waveManager.getCurrentWaveType();
+        String message;
+        Color color;
+        
+        switch (waveType) {
+            case BOSS -> {
+                message = "BOSS - WAVE " + geti(GameVars.LEVEL);
+                color = Color.MAGENTA;
+            }
+            case KAMIKAZE -> {
+                message = "KAMIKAZE - WAVE " + geti(GameVars.LEVEL);
+                color = Color.ORANGERED;
+            }
+            default -> {
+                message = "WAVE " + geti(GameVars.LEVEL);
+                color = Color.YELLOW;
+            }
+        }
+        
+        showBanner(message, color, 2.0);
     }
     
     private static final double BULLET_SPEED = -500;
-    private static final double SPREAD_VX = 80;
     
     private void fire() {
         if (player == null || gameOver || showingTitleScreen) return;
@@ -405,19 +439,19 @@ public class DeltaBladeApp extends GameApplication {
         double topY = pc.getTopY();
         
         if (grade == 1) {
-            spawnBullet(centerX - 2, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX - 6, topY, 0, BULLET_SPEED);
         } else if (grade == 2) {
-            spawnBullet(centerX - 10, topY + 3, 0, BULLET_SPEED);
-            spawnBullet(centerX + 6, topY + 3, 0, BULLET_SPEED);
+            spawnBullet(centerX - 12, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX + 4, topY, 0, BULLET_SPEED);
         } else if (grade == 3) {
-            spawnBullet(centerX - 2, topY, 0, BULLET_SPEED);
-            spawnBullet(centerX - 14, topY + 5, -SPREAD_VX, BULLET_SPEED);
-            spawnBullet(centerX + 10, topY + 5, SPREAD_VX, BULLET_SPEED);
+            spawnBullet(centerX - 18, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX - 6, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX + 6, topY, 0, BULLET_SPEED);
         } else {
-            spawnBullet(centerX - 6, topY, -SPREAD_VX * 0.4, BULLET_SPEED);
-            spawnBullet(centerX + 2, topY, SPREAD_VX * 0.4, BULLET_SPEED);
-            spawnBullet(centerX - 18, topY + 6, -SPREAD_VX * 1.2, BULLET_SPEED);
-            spawnBullet(centerX + 14, topY + 6, SPREAD_VX * 1.2, BULLET_SPEED);
+            spawnBullet(centerX - 18, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX - 6, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX + 6, topY, 0, BULLET_SPEED);
+            spawnBullet(centerX + 18, topY, 0, BULLET_SPEED);
         }
     }
     
@@ -467,10 +501,18 @@ public class DeltaBladeApp extends GameApplication {
                 
                 double deathX = enemy.getX() + enemy.getWidth() / 2 - 32;
                 double deathY = enemy.getY() + enemy.getHeight() / 2 - 32;
-                String explosionSize = ec.getType() == EnemyComponent.EnemyType.TOUGH ? "big" : "ship";
+                
+                boolean isBoss = ec.isBoss();
+                String explosionSize = (isBoss || ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
                 spawnExplosion(deathX, deathY, explosionSize);
                 
-                trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
+                if (isBoss) {
+                    int bossMoney = GameVars.BOSS_MONEY;
+                    inc(GameVars.MONEY, bossMoney);
+                    showFloatingMoney(enemy.getX() + enemy.getWidth() / 2, enemy.getY(), bossMoney);
+                } else {
+                    trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
+                }
                 
                 enemy.removeFromWorld();
                 
@@ -510,6 +552,8 @@ public class DeltaBladeApp extends GameApplication {
     private void playerHit(PlayerComponent pc) {
         inc(GameVars.LIVES, -1);
         pc.makeInvulnerable();
+        
+        set(GameVars.AUTOFIRE, false);
 
         if (player != null) {
             double explosionX = player.getX() + player.getWidth() / 2 - 32;
@@ -527,35 +571,72 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void trySpawnPickup(double x, double y) {
-        inc(GameVars.MONEY, GameVars.KILL_MONEY_BASE + random.nextInt(6));
+        int moneyGained = GameVars.KILL_MONEY_BASE + random.nextInt(6);
+        inc(GameVars.MONEY, moneyGained);
+        showFloatingMoney(x, y, moneyGained);
         
-        if (random.nextDouble() < GameVars.EXTRA_LETTER_DROP_CHANCE) {
-            int nextLetterIndex = getNextExtraLetterIndex();
-            if (nextLetterIndex >= 0) {
-                char letter = GameVars.EXTRA_LETTERS[nextLetterIndex];
+        boolean extraLetterInWorld = !getGameWorld().getEntitiesByType(EntityType.EXTRA_LETTER_PICKUP).isEmpty();
+        boolean extraLetterSpawnedThisWave = geti(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE) > 0;
+        
+        if (!extraLetterInWorld && !extraLetterSpawnedThisWave && random.nextDouble() < GameVars.EXTRA_LETTER_DROP_CHANCE) {
+            int letterIndex = getRandomUnownedLetterIndex();
+            if (letterIndex >= 0) {
+                char letter = GameVars.EXTRA_LETTERS[letterIndex];
                 spawn("extraLetterOrb", new com.almasb.fxgl.entity.SpawnData(x - 14, y - 14)
                         .put("letter", letter)
-                        .put("letterIndex", nextLetterIndex));
+                        .put("letterIndex", letterIndex));
+                set(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE, 1);
+                return;
             }
-        } else if (random.nextDouble() < 0.25) {
-            double roll = random.nextDouble();
-            String pickupType;
-            if (roll < 0.55) {
-                pickupType = "weaponPickup";
-            } else {
-                pickupType = "ammoPickup";
+        }
+        
+        if (random.nextDouble() < GameVars.AUTOFIRE_DROP_CHANCE) {
+            if (!getb(GameVars.AUTOFIRE)) {
+                spawn("autofirePickup", x - 14, y - 14);
             }
+            return;
+        }
+        
+        if (random.nextDouble() < GameVars.PICKUP_DROP_CHANCE) {
+            String pickupType = random.nextBoolean() ? "weaponPickup" : "ammoPickup";
             spawn(pickupType, x - 14, y - 14);
         }
     }
     
-    private int getNextExtraLetterIndex() {
+    private int getRandomUnownedLetterIndex() {
+        List<Integer> unownedIndices = new ArrayList<>();
         for (int i = 0; i < GameVars.EXTRA_VARS.length; i++) {
             if (geti(GameVars.EXTRA_VARS[i]) == 0) {
-                return i;
+                unownedIndices.add(i);
             }
         }
-        return -1;
+        if (unownedIndices.isEmpty()) {
+            return -1;
+        }
+        return unownedIndices.get(random.nextInt(unownedIndices.size()));
+    }
+    
+    private void showFloatingMoney(double x, double y, int amount) {
+        Text floatText = new Text("+" + amount + "$");
+        floatText.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
+        floatText.setFill(Color.GOLD);
+        floatText.setStroke(Color.BLACK);
+        floatText.setStrokeWidth(0.5);
+        floatText.setTranslateX(x - 15);
+        floatText.setTranslateY(y);
+        
+        getGameScene().addUINode(floatText);
+        
+        Timeline timeline = new Timeline(
+            new KeyFrame(Duration.ZERO, 
+                new KeyValue(floatText.translateYProperty(), y),
+                new KeyValue(floatText.opacityProperty(), 1.0)),
+            new KeyFrame(Duration.seconds(0.6), 
+                new KeyValue(floatText.translateYProperty(), y - 40),
+                new KeyValue(floatText.opacityProperty(), 0.0))
+        );
+        timeline.setOnFinished(e -> getGameScene().removeUINode(floatText));
+        timeline.play();
     }
     
     private void collectExtraLetter(char letter, int letterIndex) {
@@ -607,6 +688,11 @@ public class DeltaBladeApp extends GameApplication {
                 inc(GameVars.SCORE, 25);
                 inc(GameVars.MONEY, 10);
                 showBanner("MUNI", Color.CYAN, 1.2);
+            }
+            case AUTOFIRE -> {
+                set(GameVars.AUTOFIRE, true);
+                inc(GameVars.SCORE, 100);
+                showBanner("AUTO", Color.CYAN, 1.2);
             }
             default -> {}
         }
@@ -709,6 +795,10 @@ public class DeltaBladeApp extends GameApplication {
     private Rectangle ammoBar;
     private Rectangle weaponBar;
     private Rectangle livesBar;
+    private Text ammoNumericLabel;
+    private Text weaponNumericLabel;
+    private Rectangle autoLamp;
+    private Text autoLampText;
     
     private static final Color[] LETTER_COLORS = {
         Color.rgb(255, 80, 80),
@@ -721,22 +811,24 @@ public class DeltaBladeApp extends GameApplication {
     @Override
     protected void initUI() {
         int railWidth = GameVars.RAIL_WIDTH;
-        int xOffset = 8;
-        int yStart = 12;
+        int xOffset = 4;
+        int yStart = 8;
         
         Text moneyLabel = new Text();
-        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
         moneyLabel.setFill(Color.YELLOW);
+        moneyLabel.setStroke(Color.BLACK);
+        moneyLabel.setStrokeWidth(1);
         moneyLabel.setTranslateX(xOffset);
-        moneyLabel.setTranslateY(yStart + 12);
-        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("%d$"));
+        moneyLabel.setTranslateY(yStart + 14);
+        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("CASH %d$"));
         
-        DropShadow moneyShadow = new DropShadow(2, Color.BLACK);
+        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
         moneyLabel.setEffect(moneyShadow);
         getGameScene().addUINode(moneyLabel);
         
-        int extraY = yStart + 40;
-        int letterSpacing = 28;
+        int extraY = yStart + 28;
+        int letterSpacing = 26;
         
         for (int i = 0; i < 5; i++) {
             char letter = GameVars.EXTRA_LETTERS[i];
@@ -751,31 +843,80 @@ public class DeltaBladeApp extends GameApplication {
             getGameScene().addUINode(letterGroup);
         }
         
-        int barsY = extraY + 5 * letterSpacing + 10;
-        int barWidth = railWidth - 14;
+        int barsY = extraY + 5 * letterSpacing + 6;
+        int barWidth = railWidth - 26;
         int barHeight = 8;
-        int barSpacing = 14;
+        int barSpacing = 18;
+        int labelOffset = 14;
         
-        Rectangle ammoBarBg = createBarBackground(xOffset, barsY, barWidth, barHeight);
-        ammoBar = createStatusBar(xOffset + 1, barsY + 1, barWidth - 2, barHeight - 2, Color.DEEPSKYBLUE);
+        Text ammoLabelB = new Text("B");
+        ammoLabelB.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        ammoLabelB.setFill(Color.DEEPSKYBLUE);
+        ammoLabelB.setTranslateX(xOffset);
+        ammoLabelB.setTranslateY(barsY + barHeight);
+        getGameScene().addUINode(ammoLabelB);
+        
+        Rectangle ammoBarBg = createBarBackground(xOffset + labelOffset, barsY, barWidth, barHeight);
+        ammoBar = createStatusBar(xOffset + labelOffset + 1, barsY + 1, barWidth - 2, barHeight - 2, Color.DEEPSKYBLUE);
         getGameScene().addUINode(ammoBarBg);
         getGameScene().addUINode(ammoBar);
         
-        Rectangle weaponBarBg = createBarBackground(xOffset, barsY + barSpacing, barWidth, barHeight);
-        weaponBar = createStatusBar(xOffset + 1, barsY + barSpacing + 1, barWidth - 2, barHeight - 2, Color.ORANGE);
+        ammoNumericLabel = new Text();
+        ammoNumericLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+        ammoNumericLabel.setFill(Color.WHITE);
+        ammoNumericLabel.setTranslateX(xOffset + labelOffset + barWidth + 2);
+        ammoNumericLabel.setTranslateY(barsY + barHeight - 1);
+        getGameScene().addUINode(ammoNumericLabel);
+        
+        Text weaponLabelW = new Text("W");
+        weaponLabelW.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        weaponLabelW.setFill(Color.ORANGE);
+        weaponLabelW.setTranslateX(xOffset);
+        weaponLabelW.setTranslateY(barsY + barSpacing + barHeight);
+        getGameScene().addUINode(weaponLabelW);
+        
+        Rectangle weaponBarBg = createBarBackground(xOffset + labelOffset, barsY + barSpacing, barWidth, barHeight);
+        weaponBar = createStatusBar(xOffset + labelOffset + 1, barsY + barSpacing + 1, barWidth - 2, barHeight - 2, Color.ORANGE);
         getGameScene().addUINode(weaponBarBg);
         getGameScene().addUINode(weaponBar);
         
-        Rectangle livesBarBg = createBarBackground(xOffset, barsY + barSpacing * 2, barWidth, barHeight);
-        livesBar = createStatusBar(xOffset + 1, barsY + barSpacing * 2 + 1, barWidth - 2, barHeight - 2, Color.LIMEGREEN);
+        weaponNumericLabel = new Text();
+        weaponNumericLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+        weaponNumericLabel.setFill(Color.WHITE);
+        weaponNumericLabel.setTranslateX(xOffset + labelOffset + barWidth + 2);
+        weaponNumericLabel.setTranslateY(barsY + barSpacing + barHeight - 1);
+        getGameScene().addUINode(weaponNumericLabel);
+        
+        Rectangle livesBarBg = createBarBackground(xOffset + labelOffset, barsY + barSpacing * 2, barWidth, barHeight);
+        livesBar = createStatusBar(xOffset + labelOffset + 1, barsY + barSpacing * 2 + 1, barWidth - 2, barHeight - 2, Color.LIMEGREEN);
         getGameScene().addUINode(livesBarBg);
         getGameScene().addUINode(livesBar);
+        
+        int autoY = barsY + barSpacing * 3 + 4;
+        autoLamp = new Rectangle(12, 12);
+        autoLamp.setFill(Color.rgb(40, 40, 40));
+        autoLamp.setStroke(Color.rgb(80, 80, 80));
+        autoLamp.setStrokeWidth(1);
+        autoLamp.setArcWidth(3);
+        autoLamp.setArcHeight(3);
+        autoLamp.setTranslateX(xOffset);
+        autoLamp.setTranslateY(autoY);
+        getGameScene().addUINode(autoLamp);
+        
+        autoLampText = new Text("AUTO");
+        autoLampText.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+        autoLampText.setFill(Color.rgb(60, 60, 60));
+        autoLampText.setTranslateX(xOffset + 15);
+        autoLampText.setTranslateY(autoY + 10);
+        getGameScene().addUINode(autoLampText);
         
         getip(GameVars.ACTIVE_BULLETS).addListener((obs, o, n) -> updateBars());
         getip(GameVars.AMMO_CAP).addListener((obs, o, n) -> updateBars());
         getip(GameVars.WEAPON_GRADE).addListener((obs, o, n) -> updateBars());
         getip(GameVars.LIVES).addListener((obs, o, n) -> updateBars());
+        getbp(GameVars.AUTOFIRE).addListener((obs, o, n) -> updateAutoLamp());
         updateBars();
+        updateAutoLamp();
         
         Text scoreLabel = new Text();
         scoreLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
@@ -912,20 +1053,47 @@ public class DeltaBladeApp extends GameApplication {
     
     private void updateBars() {
         int railWidth = GameVars.RAIL_WIDTH;
-        int barWidth = railWidth - 16;
+        int barWidth = railWidth - 28;
         
         int available = geti(GameVars.AMMO_CAP) - geti(GameVars.ACTIVE_BULLETS);
         int cap = geti(GameVars.AMMO_CAP);
         double ammoRatio = cap > 0 ? (double) available / cap : 0;
         ammoBar.setWidth(Math.max(1, barWidth * ammoRatio));
         
+        if (ammoNumericLabel != null) {
+            ammoNumericLabel.setText(available + "/" + cap);
+        }
+        
         int weapon = geti(GameVars.WEAPON_GRADE);
         double weaponRatio = (double) weapon / GameVars.MAX_WEAPON_GRADE;
         weaponBar.setWidth(Math.max(1, barWidth * weaponRatio));
         
+        if (weaponNumericLabel != null) {
+            weaponNumericLabel.setText(String.valueOf(weapon));
+        }
+        
         int lives = geti(GameVars.LIVES);
         double livesRatio = Math.min(1.0, (double) lives / 5);
         livesBar.setWidth(Math.max(1, barWidth * livesRatio));
+    }
+    
+    private void updateAutoLamp() {
+        boolean autoOn = getb(GameVars.AUTOFIRE);
+        if (autoLamp != null) {
+            if (autoOn) {
+                autoLamp.setFill(Color.CYAN);
+                autoLamp.setStroke(Color.WHITE);
+                DropShadow glow = new DropShadow(8, Color.CYAN);
+                autoLamp.setEffect(glow);
+            } else {
+                autoLamp.setFill(Color.rgb(40, 40, 40));
+                autoLamp.setStroke(Color.rgb(80, 80, 80));
+                autoLamp.setEffect(null);
+            }
+        }
+        if (autoLampText != null) {
+            autoLampText.setFill(autoOn ? Color.CYAN : Color.rgb(60, 60, 60));
+        }
     }
     
     public static void main(String[] args) {

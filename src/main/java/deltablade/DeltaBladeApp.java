@@ -579,9 +579,18 @@ public class DeltaBladeApp extends GameApplication {
             activeShake.stop();
         }
         
-        var viewport = getGameScene().getViewport();
-        viewport.setX(0);
-        viewport.setY(0);
+        List<Entity> shakeable = new java.util.ArrayList<>();
+        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.ENEMY));
+        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.PLAYER));
+        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.ENEMY_BULLET));
+        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.PLAYER_BULLET));
+        
+        java.util.Map<Entity, double[]> originalPositions = new java.util.HashMap<>();
+        for (Entity e : shakeable) {
+            if (e.isActive()) {
+                originalPositions.put(e, new double[]{e.getX(), e.getY()});
+            }
+        }
         
         Timeline shake = new Timeline();
         for (int i = 0; i < shakeSteps; i++) {
@@ -590,21 +599,36 @@ public class DeltaBladeApp extends GameApplication {
             final double offsetY = (random.nextDouble() - 0.5) * 2 * intensity * decay;
             shake.getKeyFrames().add(new KeyFrame(Duration.seconds(i * stepDuration),
                 e -> {
-                    viewport.setX(offsetX);
-                    viewport.setY(offsetY);
+                    for (var entry : originalPositions.entrySet()) {
+                        Entity ent = entry.getKey();
+                        if (ent.isActive()) {
+                            ent.setX(entry.getValue()[0] + offsetX);
+                            ent.setY(entry.getValue()[1] + offsetY);
+                        }
+                    }
                 }
             ));
         }
         shake.getKeyFrames().add(new KeyFrame(Duration.seconds(shakeDuration),
             e -> {
-                viewport.setX(0);
-                viewport.setY(0);
+                for (var entry : originalPositions.entrySet()) {
+                    Entity ent = entry.getKey();
+                    if (ent.isActive()) {
+                        ent.setX(entry.getValue()[0]);
+                        ent.setY(entry.getValue()[1]);
+                    }
+                }
             }
         ));
         
         shake.setOnFinished(e -> {
-            viewport.setX(0);
-            viewport.setY(0);
+            for (var entry : originalPositions.entrySet()) {
+                Entity ent = entry.getKey();
+                if (ent.isActive()) {
+                    ent.setX(entry.getValue()[0]);
+                    ent.setY(entry.getValue()[1]);
+                }
+            }
             if (activeShake == shake) {
                 activeShake = null;
             }
@@ -623,34 +647,6 @@ public class DeltaBladeApp extends GameApplication {
                 .at(-20, -20)
                 .view(flash)
                 .zIndex(500)
-                .build();
-        getGameWorld().addEntity(flashEntity);
-        
-        FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
-        fadeOut.setFromValue(1.0);
-        fadeOut.setToValue(0.0);
-        fadeOut.setOnFinished(e -> {
-            if (flashEntity.isActive()) {
-                flashEntity.removeFromWorld();
-            }
-        });
-        fadeOut.play();
-    }
-    
-    private void spawnBossHitFlash(Entity enemy) {
-        double ex = enemy.getX();
-        double ey = enemy.getY();
-        double ew = enemy.getWidth();
-        double eh = enemy.getHeight();
-        
-        Rectangle flash = new Rectangle(ew + 10, eh + 10);
-        flash.setFill(Color.rgb(255, 255, 255, 0.6));
-        flash.setMouseTransparent(true);
-        
-        Entity flashEntity = entityBuilder()
-                .at(ex - 5, ey - 5)
-                .view(flash)
-                .zIndex(160)
                 .build();
         getGameWorld().addEntity(flashEntity);
         
@@ -694,8 +690,7 @@ public class DeltaBladeApp extends GameApplication {
             boolean isNonFatalHit = !ec.isDead();
             
             if (isBossOrTough && isNonFatalHit) {
-                spawnExplosion(hitX, hitY, "boss_hit");
-                spawnBossHitFlash(enemy);
+                spawnExplosion(hitX, hitY, "hit");
             } else {
                 spawnExplosion(hitX, hitY, "hit");
             }
@@ -1166,11 +1161,13 @@ public class DeltaBladeApp extends GameApplication {
         updateBars();
         updateAutoLamp();
         
+        int hudY = 24;
+        
         Text scoreLabel = new Text();
         scoreLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
         scoreLabel.setFill(Color.WHITE);
-        scoreLabel.setTranslateX(getAppWidth() / 2 - 50);
-        scoreLabel.setTranslateY(20);
+        scoreLabel.setTranslateX(railWidth + 10);
+        scoreLabel.setTranslateY(hudY);
         scoreLabel.textProperty().bind(getip(GameVars.SCORE).asString("SCORE %d"));
         
         DropShadow scoreShadow = new DropShadow(3, Color.BLACK);
@@ -1180,8 +1177,8 @@ public class DeltaBladeApp extends GameApplication {
         Text moneyLabel = new Text();
         moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
         moneyLabel.setFill(Color.GOLD);
-        moneyLabel.setTranslateX(getAppWidth() / 2 + 70);
-        moneyLabel.setTranslateY(20);
+        moneyLabel.setTranslateX(railWidth + 130);
+        moneyLabel.setTranslateY(hudY);
         moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
         
         DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
@@ -1191,8 +1188,8 @@ public class DeltaBladeApp extends GameApplication {
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 11));
         levelLabel.setFill(Color.LIGHTGRAY);
-        levelLabel.setTranslateX(getAppWidth() / 2 - 30);
-        levelLabel.setTranslateY(35);
+        levelLabel.setTranslateX(railWidth + 10);
+        levelLabel.setTranslateY(hudY + 18);
         levelLabel.textProperty().bind(getip(GameVars.LEVEL).asString("WAVE %d"));
         getGameScene().addUINode(levelLabel);
         

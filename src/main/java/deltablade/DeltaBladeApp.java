@@ -308,11 +308,14 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void showBanner(String message, Color textColor, double durationSeconds) {
-        Rectangle bar = new Rectangle(getAppWidth(), 40);
+        int railWidth = GameVars.RAIL_WIDTH;
+        int innerWidth = getAppWidth() - 2 * railWidth;
+        
+        Rectangle bar = new Rectangle(innerWidth, 40);
         bar.setFill(Color.rgb(20, 20, 20, 0.95));
         bar.setStroke(textColor);
         bar.setStrokeWidth(2);
-        bar.setTranslateX(0);
+        bar.setTranslateX(railWidth);
         bar.setTranslateY(40);
         
         Text text = new Text(message);
@@ -322,7 +325,7 @@ public class DeltaBladeApp extends GameApplication {
         text.setStrokeWidth(1);
         
         double textWidth = text.getLayoutBounds().getWidth();
-        text.setTranslateX((getAppWidth() - textWidth) / 2);
+        text.setTranslateX(railWidth + (innerWidth - textWidth) / 2);
         text.setTranslateY(68);
         
         Group banner = new Group(bar, text);
@@ -597,6 +600,27 @@ public class DeltaBladeApp extends GameApplication {
         fadeOut.play();
     }
     
+    private void spawnBossHitFlash(Entity enemy) {
+        double ex = enemy.getX();
+        double ey = enemy.getY();
+        double ew = enemy.getWidth();
+        double eh = enemy.getHeight();
+        
+        Rectangle flash = new Rectangle(ew + 10, eh + 10);
+        flash.setFill(Color.rgb(255, 255, 255, 0.6));
+        flash.setMouseTransparent(true);
+        flash.setTranslateX(ex - 5);
+        flash.setTranslateY(ey - 5);
+        
+        getGameScene().addUINode(flash);
+        
+        FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
+        fadeOut.setFromValue(1.0);
+        fadeOut.setToValue(0.0);
+        fadeOut.setOnFinished(e -> getGameScene().removeUINode(flash));
+        fadeOut.play();
+    }
+    
     public void spawnEnemyBullet(double x, double y) {
         spawn("enemyBullet", x - 4, y);
     }
@@ -621,7 +645,16 @@ public class DeltaBladeApp extends GameApplication {
 
             double hitX = bullet.getX() + bullet.getWidth() / 2;
             double hitY = bullet.getY() + bullet.getHeight() / 2;
-            spawnExplosion(hitX, hitY, "hit");
+            
+            boolean isBossOrTough = ec.isBoss() || ec.getType() == EnemyComponent.EnemyType.TOUGH;
+            boolean isNonFatalHit = !ec.isDead();
+            
+            if (isBossOrTough && isNonFatalHit) {
+                spawnExplosion(hitX, hitY, "boss_hit");
+                spawnBossHitFlash(enemy);
+            } else {
+                spawnExplosion(hitX, hitY, "hit");
+            }
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
@@ -944,20 +977,7 @@ public class DeltaBladeApp extends GameApplication {
         int xOffset = 4;
         int yStart = 8;
         
-        Text moneyLabel = new Text();
-        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
-        moneyLabel.setFill(Color.YELLOW);
-        moneyLabel.setStroke(Color.BLACK);
-        moneyLabel.setStrokeWidth(1);
-        moneyLabel.setTranslateX(xOffset);
-        moneyLabel.setTranslateY(yStart + 14);
-        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("CASH %d$"));
-        
-        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
-        moneyLabel.setEffect(moneyShadow);
-        getGameScene().addUINode(moneyLabel);
-        
-        int extraY = yStart + 28;
+        int extraY = yStart + 14;
         int letterSpacing = 26;
         
         for (int i = 0; i < 5; i++) {
@@ -1058,6 +1078,17 @@ public class DeltaBladeApp extends GameApplication {
         DropShadow scoreShadow = new DropShadow(3, Color.BLACK);
         scoreLabel.setEffect(scoreShadow);
         getGameScene().addUINode(scoreLabel);
+        
+        Text moneyLabel = new Text();
+        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
+        moneyLabel.setFill(Color.GOLD);
+        moneyLabel.setTranslateX(getAppWidth() / 2 + 70);
+        moneyLabel.setTranslateY(20);
+        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
+        
+        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
+        moneyLabel.setEffect(moneyShadow);
+        getGameScene().addUINode(moneyLabel);
         
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 11));

@@ -405,6 +405,7 @@ public class DeltaBladeFactory implements EntityFactory {
         int displayW;
         int displayH;
 
+        int zIndex = 90;
         switch (size) {
             case "hit" -> {
                 textureName = "explosion_hit.png";
@@ -417,6 +418,19 @@ public class DeltaBladeFactory implements EntityFactory {
                 duration = 0.35;
                 displayW = 80;
                 displayH = 80;
+            }
+            case "boss_hit" -> {
+                textureName = "explosion_hit.png";
+                frameCount = 6;
+                frameWidth = 32;
+                frameHeight = 32;
+                columns = 6;
+                sheetWidth = 192;
+                sheetHeight = 32;
+                duration = 0.45;
+                displayW = 150;
+                displayH = 150;
+                zIndex = 150;
             }
             case "big" -> {
                 textureName = "explosion_big.png";
@@ -460,7 +474,7 @@ public class DeltaBladeFactory implements EntityFactory {
 
         return FXGL.entityBuilder(data)
                 .view(view)
-                .zIndex(90)
+                .zIndex(zIndex)
                 .with(explosionComp)
                 .build();
     }

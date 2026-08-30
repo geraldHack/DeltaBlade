@@ -308,11 +308,14 @@ public class DeltaBladeApp extends GameApplication {
     }
     
     private void showBanner(String message, Color textColor, double durationSeconds) {
-        Rectangle bar = new Rectangle(getAppWidth(), 40);
+        int railWidth = GameVars.RAIL_WIDTH;
+        int innerWidth = getAppWidth() - 2 * railWidth;
+        
+        Rectangle bar = new Rectangle(innerWidth, 40);
         bar.setFill(Color.rgb(20, 20, 20, 0.95));
         bar.setStroke(textColor);
         bar.setStrokeWidth(2);
-        bar.setTranslateX(0);
+        bar.setTranslateX(railWidth);
         bar.setTranslateY(40);
         
         Text text = new Text(message);
@@ -322,7 +325,7 @@ public class DeltaBladeApp extends GameApplication {
         text.setStrokeWidth(1);
         
         double textWidth = text.getLayoutBounds().getWidth();
-        text.setTranslateX((getAppWidth() - textWidth) / 2);
+        text.setTranslateX(railWidth + (innerWidth - textWidth) / 2);
         text.setTranslateY(68);
         
         Group banner = new Group(bar, text);
@@ -597,6 +600,27 @@ public class DeltaBladeApp extends GameApplication {
         fadeOut.play();
     }
     
+    private void spawnBossHitFlash(Entity enemy) {
+        double ex = enemy.getX();
+        double ey = enemy.getY();
+        double ew = enemy.getWidth();
+        double eh = enemy.getHeight();
+        
+        Rectangle flash = new Rectangle(ew + 10, eh + 10);
+        flash.setFill(Color.rgb(255, 255, 255, 0.6));
+        flash.setMouseTransparent(true);
+        flash.setTranslateX(ex - 5);
+        flash.setTranslateY(ey - 5);
+        
+        getGameScene().addUINode(flash);
+        
+        FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
+        fadeOut.setFromValue(1.0);
+        fadeOut.setToValue(0.0);
+        fadeOut.setOnFinished(e -> getGameScene().removeUINode(flash));
+        fadeOut.play();
+    }
+    
     public void spawnEnemyBullet(double x, double y) {
         spawn("enemyBullet", x - 4, y);
     }
@@ -621,7 +645,16 @@ public class DeltaBladeApp extends GameApplication {
 
             double hitX = bullet.getX() + bullet.getWidth() / 2;
             double hitY = bullet.getY() + bullet.getHeight() / 2;
-            spawnExplosion(hitX, hitY, "hit");
+            
+            boolean isBossOrTough = ec.isBoss() || ec.getType() == EnemyComponent.EnemyType.TOUGH;
+            boolean isNonFatalHit = !ec.isDead();
+            
+            if (isBossOrTough && isNonFatalHit) {
+                spawnExplosion(hitX, hitY, "boss_hit");
+                spawnBossHitFlash(enemy);
+            } else {
+                spawnExplosion(hitX, hitY, "hit");
+            }
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
@@ -637,11 +670,9 @@ public class DeltaBladeApp extends GameApplication {
                 spawnExplosion(deathX, deathY, explosionSize);
                 
                 if (isBoss) {
-                    int bossMoney = GameVars.BOSS_MONEY;
-                    inc(GameVars.MONEY, bossMoney);
-                    showFloatingMoney(enemy.getX() + enemy.getWidth() / 2, enemy.getY(), bossMoney);
+                    spawnBossCoins(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
                 } else {
-                    trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
+                    trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2, ec.getType());
                 }
                 
                 enemy.removeFromWorld();
@@ -677,6 +708,12 @@ public class DeltaBladeApp extends GameApplication {
             collectExtraLetter(lpc.getLetter(), lpc.getLetterIndex());
             letterOrb.removeFromWorld();
         });
+        
+        onCollisionBegin(EntityType.COIN, EntityType.PLAYER, (coin, playerEntity) -> {
+            deltablade.components.CoinComponent cc = coin.getComponent(deltablade.components.CoinComponent.class);
+            inc(GameVars.MONEY, cc.getValue());
+            coin.removeFromWorld();
+        });
     }
     
     private void playerHit(PlayerComponent pc) {
@@ -700,11 +737,7 @@ public class DeltaBladeApp extends GameApplication {
         }
     }
     
-    private void trySpawnPickup(double x, double y) {
-        int moneyGained = GameVars.KILL_MONEY_BASE + random.nextInt(6);
-        inc(GameVars.MONEY, moneyGained);
-        showFloatingMoney(x, y, moneyGained);
-        
+    private void trySpawnPickup(double x, double y, EnemyComponent.EnemyType enemyType) {
         boolean extraLetterInWorld = !getGameWorld().getEntitiesByType(EntityType.EXTRA_LETTER_PICKUP).isEmpty();
         boolean extraLetterSpawnedThisWave = geti(GameVars.EXTRA_LETTER_SPAWNED_THIS_WAVE) > 0;
         
@@ -720,16 +753,45 @@ public class DeltaBladeApp extends GameApplication {
             }
         }
         
-        if (random.nextDouble() < GameVars.AUTOFIRE_DROP_CHANCE) {
+        double roll = random.nextDouble();
+        
+        if (roll < GameVars.AUTOFIRE_DROP_CHANCE) {
             if (!getb(GameVars.AUTOFIRE)) {
                 spawn("autofirePickup", x - 14, y - 14);
             }
             return;
         }
+        roll -= GameVars.AUTOFIRE_DROP_CHANCE;
         
-        if (random.nextDouble() < GameVars.PICKUP_DROP_CHANCE) {
+        if (roll < GameVars.PICKUP_DROP_CHANCE) {
             String pickupType = random.nextBoolean() ? "weaponPickup" : "ammoPickup";
             spawn(pickupType, x - 14, y - 14);
+            return;
+        }
+        roll -= GameVars.PICKUP_DROP_CHANCE;
+        
+        int level = geti(GameVars.LEVEL);
+        boolean canDropViolet = level >= 8 && enemyType == EnemyComponent.EnemyType.TOUGH;
+        if (canDropViolet && roll < GameVars.COIN_VIOLET_DROP_CHANCE) {
+            spawnCoin(x, y, "violet");
+            return;
+        }
+        if (canDropViolet) roll -= GameVars.COIN_VIOLET_DROP_CHANCE;
+        
+        if (roll < GameVars.COIN_WHITE_DROP_CHANCE) {
+            spawnCoin(x, y, "white");
+            return;
+        }
+        roll -= GameVars.COIN_WHITE_DROP_CHANCE;
+        
+        if (roll < GameVars.COIN_GREEN_DROP_CHANCE) {
+            spawnCoin(x, y, "green");
+            return;
+        }
+        roll -= GameVars.COIN_GREEN_DROP_CHANCE;
+        
+        if (roll < GameVars.COIN_BLUE_DROP_CHANCE) {
+            spawnCoin(x, y, "blue");
         }
     }
     
@@ -746,27 +808,31 @@ public class DeltaBladeApp extends GameApplication {
         return unownedIndices.get(random.nextInt(unownedIndices.size()));
     }
     
-    private void showFloatingMoney(double x, double y, int amount) {
-        Text floatText = new Text("+" + amount + "$");
-        floatText.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
-        floatText.setFill(Color.GOLD);
-        floatText.setStroke(Color.BLACK);
-        floatText.setStrokeWidth(0.5);
-        floatText.setTranslateX(x - 15);
-        floatText.setTranslateY(y);
+    private void spawnCoin(double x, double y, String coinType) {
+        spawn("coin", new com.almasb.fxgl.entity.SpawnData(x - 8, y - 8)
+                .put("coinType", coinType));
+    }
+    
+    private void spawnBossCoins(double x, double y) {
+        if (random.nextDouble() < 0.85) {
+            spawnCoin(x, y, "violet");
+        }
         
-        getGameScene().addUINode(floatText);
-        
-        Timeline timeline = new Timeline(
-            new KeyFrame(Duration.ZERO, 
-                new KeyValue(floatText.translateYProperty(), y),
-                new KeyValue(floatText.opacityProperty(), 1.0)),
-            new KeyFrame(Duration.seconds(0.6), 
-                new KeyValue(floatText.translateYProperty(), y - 40),
-                new KeyValue(floatText.opacityProperty(), 0.0))
-        );
-        timeline.setOnFinished(e -> getGameScene().removeUINode(floatText));
-        timeline.play();
+        int extraCoins = 2 + random.nextInt(2);
+        for (int i = 0; i < extraCoins; i++) {
+            double offsetX = (random.nextDouble() - 0.5) * 40;
+            double offsetY = (random.nextDouble() - 0.5) * 30;
+            double coinRoll = random.nextDouble();
+            String type;
+            if (coinRoll < 0.5) {
+                type = "green";
+            } else if (coinRoll < 0.85) {
+                type = "blue";
+            } else {
+                type = "white";
+            }
+            spawnCoin(x + offsetX, y + offsetY, type);
+        }
     }
     
     private void collectExtraLetter(char letter, int letterIndex) {
@@ -808,7 +874,6 @@ public class DeltaBladeApp extends GameApplication {
                     inc(GameVars.WEAPON_GRADE, 1);
                 }
                 inc(GameVars.SCORE, 50);
-                inc(GameVars.MONEY, 15);
                 showBanner("WAFFE", Color.GOLD, 1.2);
             }
             case EXTRA_AMMO -> {
@@ -816,7 +881,6 @@ public class DeltaBladeApp extends GameApplication {
                     inc(GameVars.AMMO_CAP, 1);
                 }
                 inc(GameVars.SCORE, 25);
-                inc(GameVars.MONEY, 10);
                 showBanner("MUNI", Color.CYAN, 1.2);
             }
             case AUTOFIRE -> {
@@ -831,8 +895,6 @@ public class DeltaBladeApp extends GameApplication {
     private void checkWaveComplete() {
         if (waveManager.isWaveComplete() && !waveTransition) {
             waveTransition = true;
-            
-            inc(GameVars.MONEY, GameVars.WAVE_CLEAR_MONEY + geti(GameVars.LEVEL) * 10);
             
             showBanner("WAVE CLEAR!", Color.LIME, 2.0);
             
@@ -944,20 +1006,7 @@ public class DeltaBladeApp extends GameApplication {
         int xOffset = 4;
         int yStart = 8;
         
-        Text moneyLabel = new Text();
-        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
-        moneyLabel.setFill(Color.YELLOW);
-        moneyLabel.setStroke(Color.BLACK);
-        moneyLabel.setStrokeWidth(1);
-        moneyLabel.setTranslateX(xOffset);
-        moneyLabel.setTranslateY(yStart + 14);
-        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("CASH %d$"));
-        
-        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
-        moneyLabel.setEffect(moneyShadow);
-        getGameScene().addUINode(moneyLabel);
-        
-        int extraY = yStart + 28;
+        int extraY = yStart + 14;
         int letterSpacing = 26;
         
         for (int i = 0; i < 5; i++) {
@@ -1058,6 +1107,17 @@ public class DeltaBladeApp extends GameApplication {
         DropShadow scoreShadow = new DropShadow(3, Color.BLACK);
         scoreLabel.setEffect(scoreShadow);
         getGameScene().addUINode(scoreLabel);
+        
+        Text moneyLabel = new Text();
+        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
+        moneyLabel.setFill(Color.GOLD);
+        moneyLabel.setTranslateX(getAppWidth() / 2 + 70);
+        moneyLabel.setTranslateY(20);
+        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
+        
+        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
+        moneyLabel.setEffect(moneyShadow);
+        getGameScene().addUINode(moneyLabel);
         
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 11));

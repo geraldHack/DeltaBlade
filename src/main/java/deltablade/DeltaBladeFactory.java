@@ -293,7 +293,7 @@ public class DeltaBladeFactory implements EntityFactory {
                 columns = 6;
                 sheetWidth = 192;
                 sheetHeight = 32;
-                duration = 0.2;
+                duration = 0.35;
             }
             case "big" -> {
                 textureName = "explosion_big.png";
@@ -319,17 +319,57 @@ public class DeltaBladeFactory implements EntityFactory {
 
         Image spriteSheet = EmbeddedTextures.getImage(textureName, sheetWidth, sheetHeight);
         if (spriteSheet == null || spriteSheet.isError()) {
-            System.err.println("Failed to load explosion texture: " + textureName);
-            return FXGL.entityBuilder(data).build();
+            return createFallbackExplosion(data, frameWidth);
         }
 
         ExplosionComponent explosionComp = new ExplosionComponent(
                 spriteSheet, frameCount, frameWidth, frameHeight, columns, duration);
+
+        if ("hit".equals(size)) {
+            explosionComp.setDisplaySize(48, 48);
+        } else {
+            explosionComp.setDisplaySize(frameWidth, frameHeight);
+        }
 
         return FXGL.entityBuilder(data)
                 .view(explosionComp.getView())
                 .zIndex(90)
                 .with(explosionComp)
                 .build();
+    }
+
+    private Entity createFallbackExplosion(SpawnData data, int displaySize) {
+        Group circleGroup = new Group();
+        double center = displaySize / 2.0;
+
+        Circle c1 = new Circle(center * 0.6);
+        c1.setFill(Color.ORANGE);
+        c1.setCenterX(center);
+        c1.setCenterY(center);
+
+        Circle c2 = new Circle(center * 0.4);
+        c2.setFill(Color.YELLOW);
+        c2.setCenterX(center - center * 0.2);
+        c2.setCenterY(center - center * 0.15);
+
+        Circle c3 = new Circle(center * 0.25);
+        c3.setFill(Color.WHITE);
+        c3.setCenterX(center + center * 0.15);
+        c3.setCenterY(center + center * 0.1);
+
+        circleGroup.getChildren().addAll(c1, c2, c3);
+
+        Entity entity = FXGL.entityBuilder(data)
+                .view(circleGroup)
+                .zIndex(90)
+                .build();
+
+        FXGL.getGameTimer().runOnceAfter(() -> {
+            if (entity.isActive()) {
+                entity.removeFromWorld();
+            }
+        }, javafx.util.Duration.seconds(0.25));
+
+        return entity;
     }
 }

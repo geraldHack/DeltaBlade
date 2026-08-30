@@ -62,6 +62,7 @@ public class DeltaBladeApp extends GameApplication {
     private List<Node> activeBanners = new ArrayList<>();
     
     private Timeline activeShake = null;
+    private List<Node> shakenViewNodes = new ArrayList<>();
     
     @Override
     protected void initSettings(GameSettings settings) {
@@ -569,6 +570,14 @@ public class DeltaBladeApp extends GameApplication {
         combo.play();
     }
     
+    private void resetShakenViews() {
+        for (Node node : shakenViewNodes) {
+            node.setTranslateX(0);
+            node.setTranslateY(0);
+        }
+        shakenViewNodes.clear();
+    }
+    
     private void triggerScreenShake(String size) {
         double intensity = "big".equals(size) ? 12 : 6;
         double shakeDuration = 0.18;
@@ -578,19 +587,23 @@ public class DeltaBladeApp extends GameApplication {
         if (activeShake != null) {
             activeShake.stop();
         }
+        resetShakenViews();
         
-        List<Entity> shakeable = new java.util.ArrayList<>();
-        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.ENEMY));
-        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.PLAYER));
-        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.ENEMY_BULLET));
-        shakeable.addAll(getGameWorld().getEntitiesByType(EntityType.PLAYER_BULLET));
-        
-        java.util.Map<Entity, double[]> originalPositions = new java.util.HashMap<>();
-        for (Entity e : shakeable) {
-            if (e.isActive()) {
-                originalPositions.put(e, new double[]{e.getX(), e.getY()});
-            }
+        shakenViewNodes.clear();
+        for (Entity e : getGameWorld().getEntitiesByType(EntityType.ENEMY)) {
+            if (e.isActive()) shakenViewNodes.add(e.getViewComponent().getParent());
         }
+        for (Entity e : getGameWorld().getEntitiesByType(EntityType.PLAYER)) {
+            if (e.isActive()) shakenViewNodes.add(e.getViewComponent().getParent());
+        }
+        for (Entity e : getGameWorld().getEntitiesByType(EntityType.ENEMY_BULLET)) {
+            if (e.isActive()) shakenViewNodes.add(e.getViewComponent().getParent());
+        }
+        for (Entity e : getGameWorld().getEntitiesByType(EntityType.PLAYER_BULLET)) {
+            if (e.isActive()) shakenViewNodes.add(e.getViewComponent().getParent());
+        }
+        
+        List<Node> currentNodes = new ArrayList<>(shakenViewNodes);
         
         Timeline shake = new Timeline();
         for (int i = 0; i < shakeSteps; i++) {
@@ -599,38 +612,30 @@ public class DeltaBladeApp extends GameApplication {
             final double offsetY = (random.nextDouble() - 0.5) * 2 * intensity * decay;
             shake.getKeyFrames().add(new KeyFrame(Duration.seconds(i * stepDuration),
                 e -> {
-                    for (var entry : originalPositions.entrySet()) {
-                        Entity ent = entry.getKey();
-                        if (ent.isActive()) {
-                            ent.setX(entry.getValue()[0] + offsetX);
-                            ent.setY(entry.getValue()[1] + offsetY);
-                        }
+                    for (Node node : currentNodes) {
+                        node.setTranslateX(offsetX);
+                        node.setTranslateY(offsetY);
                     }
                 }
             ));
         }
         shake.getKeyFrames().add(new KeyFrame(Duration.seconds(shakeDuration),
             e -> {
-                for (var entry : originalPositions.entrySet()) {
-                    Entity ent = entry.getKey();
-                    if (ent.isActive()) {
-                        ent.setX(entry.getValue()[0]);
-                        ent.setY(entry.getValue()[1]);
-                    }
+                for (Node node : currentNodes) {
+                    node.setTranslateX(0);
+                    node.setTranslateY(0);
                 }
             }
         ));
         
         shake.setOnFinished(e -> {
-            for (var entry : originalPositions.entrySet()) {
-                Entity ent = entry.getKey();
-                if (ent.isActive()) {
-                    ent.setX(entry.getValue()[0]);
-                    ent.setY(entry.getValue()[1]);
-                }
+            for (Node node : currentNodes) {
+                node.setTranslateX(0);
+                node.setTranslateY(0);
             }
             if (activeShake == shake) {
                 activeShake = null;
+                shakenViewNodes.clear();
             }
         });
         
@@ -686,14 +691,7 @@ public class DeltaBladeApp extends GameApplication {
             double hitX = bullet.getX() + bullet.getWidth() / 2;
             double hitY = bullet.getY() + bullet.getHeight() / 2;
             
-            boolean isBossOrTough = ec.isBoss() || ec.getType() == EnemyComponent.EnemyType.TOUGH;
-            boolean isNonFatalHit = !ec.isDead();
-            
-            if (isBossOrTough && isNonFatalHit) {
-                spawnExplosion(hitX, hitY, "hit");
-            } else {
-                spawnExplosion(hitX, hitY, "hit");
-            }
+            spawnExplosion(hitX, hitY, "hit");
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
@@ -1021,6 +1019,7 @@ public class DeltaBladeApp extends GameApplication {
             activeShake.stop();
             activeShake = null;
         }
+        resetShakenViews();
         var viewport = getGameScene().getViewport();
         viewport.setX(0);
         viewport.setY(0);

@@ -529,6 +529,36 @@ public class DeltaBladeApp extends GameApplication {
         }
     }
     
+    private void spawnChipDamageSparks(double hitX, double hitY) {
+        for (int i = 0; i < 2; i++) {
+            double offsetX = (random.nextDouble() - 0.5) * 2 * (8 + random.nextDouble() * 10);
+            double offsetY = (random.nextDouble() - 0.5) * 2 * (8 + random.nextDouble() * 10);
+            long delayMs = (long) (random.nextDouble() * 50);
+            
+            runOnce(() -> {
+                spawnExplosion(hitX + offsetX, hitY + offsetY, "hit");
+            }, Duration.millis(delayMs));
+        }
+    }
+    
+    private void flashEnemySprite(Entity enemy) {
+        if (enemy == null || !enemy.isActive()) return;
+        
+        Node view = enemy.getViewComponent().getChildren().isEmpty() 
+            ? null : enemy.getViewComponent().getChildren().get(0);
+        if (view == null) return;
+        
+        javafx.scene.effect.ColorAdjust flash = new javafx.scene.effect.ColorAdjust();
+        flash.setBrightness(0.7);
+        view.setEffect(flash);
+        
+        runOnce(() -> {
+            if (enemy.isActive()) {
+                view.setEffect(null);
+            }
+        }, Duration.millis(80));
+    }
+    
     private void spawnShockwaveRing(double centerX, double centerY, String size) {
         double maxRadius = "big".equals(size) ? 160 : 110;
         double duration = "big".equals(size) ? 0.35 : 0.25;
@@ -691,7 +721,16 @@ public class DeltaBladeApp extends GameApplication {
             double hitX = bullet.getX() + bullet.getWidth() / 2;
             double hitY = bullet.getY() + bullet.getHeight() / 2;
             
-            spawnExplosion(hitX, hitY, "hit");
+            boolean isToughOrBoss = ec.getType() == EnemyComponent.EnemyType.TOUGH || ec.isBoss();
+            boolean isNonFatal = !ec.isDead();
+            
+            if (isToughOrBoss && isNonFatal) {
+                spawnExplosion(hitX, hitY, "boss_hit");
+                spawnChipDamageSparks(hitX, hitY);
+                flashEnemySprite(enemy);
+            } else {
+                spawnExplosion(hitX, hitY, "hit");
+            }
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());

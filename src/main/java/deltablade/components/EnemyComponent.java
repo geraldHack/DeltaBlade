@@ -174,11 +174,12 @@ public class EnemyComponent extends Component {
         
         double curveOffset = 0;
         if (entryPath != null) {
+            double curveFade = Math.max(0, 1 - entryProgress);
             curveOffset = switch (entryPath.type) {
-                case FROM_LEFT_CURVE -> Math.sin(entryCurvePhase) * 30 * (1 - entryProgress);
-                case FROM_RIGHT_CURVE -> -Math.sin(entryCurvePhase) * 30 * (1 - entryProgress);
-                case FROM_TOP_SPLIT -> Math.sin(entryCurvePhase * 0.5) * 50 * (1 - entryProgress);
-                case FROM_SIDE_SWOOP -> Math.sin(entryCurvePhase * 1.5) * 40 * (1 - entryProgress);
+                case FROM_LEFT_CURVE -> Math.sin(entryCurvePhase) * 30 * curveFade;
+                case FROM_RIGHT_CURVE -> -Math.sin(entryCurvePhase) * 30 * curveFade;
+                case FROM_TOP_SPLIT -> Math.sin(entryCurvePhase * 0.5) * 50 * curveFade;
+                case FROM_SIDE_SWOOP -> Math.sin(entryCurvePhase * 1.5) * 40 * curveFade;
             };
         }
         

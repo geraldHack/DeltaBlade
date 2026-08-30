@@ -487,7 +487,7 @@ public class DeltaBladeApp extends GameApplication {
         if (!pc.canFire(grade)) return;
         
         pc.onFired();
-        // shot.wav: Gerald delivers the real clip later.
+        SoundHelper.play("shot.wav");
         
         double centerX = pc.getCenterX();
         double topY = pc.getTopY();
@@ -919,13 +919,12 @@ public class DeltaBladeApp extends GameApplication {
     /**
      * Boss death: 3-5 staggered big explosions with irregular audio.
      * First explosion is immediate with shockwave/flash; others are subdued.
-     * Note: explode_boss.wav was a mislabeled voice clip; using explode_ship.wav instead.
      */
     private void spawnBossDeathSequence(double centerX, double centerY) {
         int boomCount = 3 + random.nextInt(3);
         
         spawnExplosion(centerX, centerY, "big");
-        SoundHelper.play("explode_ship.wav");
+        SoundHelper.play("explode_boss.wav");
         
         double accumulatedDelay = 0;
         for (int i = 1; i < boomCount; i++) {
@@ -938,7 +937,7 @@ public class DeltaBladeApp extends GameApplication {
             
             runOnce(() -> {
                 spawnBossFollowupExplosion(centerX + offsetX, centerY + offsetY);
-                SoundHelper.play("explode_ship.wav");
+                SoundHelper.play("explode_boss.wav");
             }, Duration.seconds(finalDelay));
         }
     }

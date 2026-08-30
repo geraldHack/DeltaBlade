@@ -270,38 +270,108 @@ public class DeltaBladeFactory implements EntityFactory {
      * Spawns an explosion effect at the given position.
      * Data keys:
      *   - "size": String - "hit" (small), "ship" (medium), or "big" (boss)
+     * 
+     * Sheet metadata:
+     *   - hit: 6 frames of 32x32, single row (192x32), duration 0.35s
+     *   - ship: 8 frames of 64x64, single row (512x64), duration 0.5s  
+     *   - big: 10 frames of 64x64, cols=8 (512x128), duration 0.7s
      */
     @Spawns("explosion")
     public Entity newExplosion(SpawnData data) {
         String size = data.hasKey("size") ? data.<String>get("size") : "ship";
 
-        String textureName = switch (size) {
-            case "hit" -> "explosion_hit.png";
-            case "big" -> "explosion_big.png";
-            default -> "explosion_ship.png";
-        };
+        String textureName;
+        double duration;
+        int frameWidth, frameHeight, frameCount, columns;
+        int displayWidth, displayHeight;
 
-        double duration = switch (size) {
-            case "hit" -> 0.4;
-            case "big" -> 0.8;
-            default -> 0.6;
-        };
+        switch (size) {
+            case "hit":
+                textureName = "explosion_hit.png";
+                frameWidth = 32;
+                frameHeight = 32;
+                frameCount = 6;
+                columns = 6;
+                duration = 0.35;
+                displayWidth = 48;
+                displayHeight = 48;
+                break;
+            case "big":
+                textureName = "explosion_big.png";
+                frameWidth = 64;
+                frameHeight = 64;
+                frameCount = 10;
+                columns = 8;
+                duration = 0.7;
+                displayWidth = 64;
+                displayHeight = 64;
+                break;
+            default:
+                textureName = "explosion_ship.png";
+                frameWidth = 64;
+                frameHeight = 64;
+                frameCount = 8;
+                columns = 8;
+                duration = 0.5;
+                displayWidth = 64;
+                displayHeight = 64;
+        }
 
-        int frameSize = 64;
-        int frameCount = 8;
-
-        Image spriteSheet = EmbeddedTextures.getImage(textureName, frameSize * frameCount, frameSize);
-        if (spriteSheet == null || spriteSheet.isError()) {
-            return FXGL.entityBuilder(data).build();
+        Image spriteSheet = EmbeddedTextures.getImage(textureName, 0, 0);
+        
+        if (spriteSheet == null || spriteSheet.isError() || 
+            spriteSheet.getWidth() == 0 || spriteSheet.getHeight() == 0) {
+            return createFallbackExplosion(data, size, duration);
         }
 
         ExplosionComponent explosionComp = new ExplosionComponent(
-                spriteSheet, frameCount, frameSize, frameSize, duration);
+                spriteSheet, frameCount, frameWidth, frameHeight, columns, duration,
+                displayWidth, displayHeight);
 
         return FXGL.entityBuilder(data)
                 .view(explosionComp.getView())
                 .zIndex(90)
                 .with(explosionComp)
+                .build();
+    }
+
+    /**
+     * Creates a visual fallback explosion using simple circles when sprite decode fails.
+     */
+    private Entity createFallbackExplosion(SpawnData data, String size, double duration) {
+        System.err.println("WARNING: Using fallback explosion for size: " + size);
+        
+        int baseSize = switch (size) {
+            case "hit" -> 24;
+            case "big" -> 48;
+            default -> 32;
+        };
+
+        Group burstGroup = new Group();
+        
+        Circle c1 = new Circle(baseSize * 0.6);
+        c1.setFill(Color.ORANGE);
+        c1.setCenterX(baseSize / 2.0);
+        c1.setCenterY(baseSize / 2.0);
+        
+        Circle c2 = new Circle(baseSize * 0.4);
+        c2.setFill(Color.YELLOW);
+        c2.setCenterX(baseSize / 2.0);
+        c2.setCenterY(baseSize / 2.0);
+        
+        Circle c3 = new Circle(baseSize * 0.2);
+        c3.setFill(Color.WHITE);
+        c3.setCenterX(baseSize / 2.0);
+        c3.setCenterY(baseSize / 2.0);
+        
+        burstGroup.getChildren().addAll(c1, c2, c3);
+
+        ExplosionComponent fallbackComp = new ExplosionComponent(duration);
+
+        return FXGL.entityBuilder(data)
+                .view(burstGroup)
+                .zIndex(90)
+                .with(fallbackComp)
                 .build();
     }
 }

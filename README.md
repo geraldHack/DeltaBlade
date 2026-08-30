@@ -43,6 +43,7 @@ mvn compile exec:java
 
 #### Combat
 - **Limited Ammo**: Start with 5 simultaneous bullets. Slots free when bullets hit or leave screen.
+- **Explosions**: Pixel-art explosion animations play on bullet hits and enemy/player deaths.
 - **Weapon Upgrades**: Collect golden pickups (W) to upgrade:
   - Grade 1: Single shot
   - Grade 2: Double shot
@@ -96,6 +97,7 @@ mvn compile exec:java
 
 #### Kampf
 - **Begrenzte Munition**: Start mit 5 gleichzeitigen Schüssen. Plätze werden frei bei Treffer oder Bildschirmrand.
+- **Explosionen**: Pixel-Art-Explosionsanimationen bei Treffern und Schiffs-/Spielertod.
 - **Waffen-Upgrades**: Sammle goldene Pickups (W):
   - Stufe 1: Einzelschuss
   - Stufe 2: Doppelschuss
@@ -129,7 +131,8 @@ DeltaBlade/
 │       ├── PlayerComponent.java         # Player movement, firing, i-frames
 │       ├── EnemyComponent.java          # Enemy AI: entry, formation, diving
 │       ├── BulletComponent.java         # Projectile movement
-│       └── PickupComponent.java         # Collectible behavior
+│       ├── PickupComponent.java         # Collectible behavior
+│       └── ExplosionComponent.java      # Animated sprite strip playback
 └── src/main/resources/                  # Resources (empty for now)
 ```
 

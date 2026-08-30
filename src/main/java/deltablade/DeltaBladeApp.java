@@ -427,6 +427,11 @@ public class DeltaBladeApp extends GameApplication {
                 .put("speedY", speedY));
         inc(GameVars.ACTIVE_BULLETS, 1);
     }
+
+    private void spawnExplosion(double x, double y, String size) {
+        spawn("explosion", new com.almasb.fxgl.entity.SpawnData(x, y)
+                .put("size", size));
+    }
     
     public void spawnEnemyBullet(double x, double y) {
         spawn("enemyBullet", x - 4, y);
@@ -449,12 +454,21 @@ public class DeltaBladeApp extends GameApplication {
             
             EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
             ec.hit();
+
+            double hitX = bullet.getX() + bullet.getWidth() / 2 - 32;
+            double hitY = bullet.getY() + bullet.getHeight() / 2 - 32;
+            spawnExplosion(hitX, hitY, "hit");
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
                 inc(GameVars.ENEMIES_REMAINING, -1);
                 
                 waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
+                
+                double deathX = enemy.getX() + enemy.getWidth() / 2 - 32;
+                double deathY = enemy.getY() + enemy.getHeight() / 2 - 32;
+                String explosionSize = ec.getType() == EnemyComponent.EnemyType.TOUGH ? "big" : "ship";
+                spawnExplosion(deathX, deathY, explosionSize);
                 
                 trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
                 
@@ -496,6 +510,12 @@ public class DeltaBladeApp extends GameApplication {
     private void playerHit(PlayerComponent pc) {
         inc(GameVars.LIVES, -1);
         pc.makeInvulnerable();
+
+        if (player != null) {
+            double explosionX = player.getX() + player.getWidth() / 2 - 32;
+            double explosionY = player.getY() + player.getHeight() / 2 - 32;
+            spawnExplosion(explosionX, explosionY, "ship");
+        }
         
         if (geti(GameVars.WEAPON_GRADE) > 1) {
             inc(GameVars.WEAPON_GRADE, -1);

@@ -15,6 +15,9 @@ public class PlayerComponent extends Component {
     private double fireCooldown = 0;
     private static final double FIRE_RATE = 0.10;
     
+    private boolean wasMovingLeft = false;
+    private boolean wasMovingRight = false;
+    
     @Override
     public void onUpdate(double tpf) {
         tpf = Math.min(tpf, MAX_TPF);
@@ -43,6 +46,8 @@ public class PlayerComponent extends Component {
         } else {
             entity.setX(minX);
         }
+        wasMovingLeft = true;
+        updateAnimationState();
     }
     
     public void moveRight(double tpf) {
@@ -52,6 +57,32 @@ public class PlayerComponent extends Component {
             entity.setX(newX);
         } else {
             entity.setX(maxX);
+        }
+        wasMovingRight = true;
+        updateAnimationState();
+    }
+    
+    public void updateIdle() {
+        if (!wasMovingLeft && !wasMovingRight) {
+            setAnimationState(PlayerAnimationComponent.AnimationState.IDLE);
+        }
+        wasMovingLeft = false;
+        wasMovingRight = false;
+    }
+    
+    private void updateAnimationState() {
+        if (wasMovingLeft && !wasMovingRight) {
+            setAnimationState(PlayerAnimationComponent.AnimationState.BANKING_LEFT);
+        } else if (wasMovingRight && !wasMovingLeft) {
+            setAnimationState(PlayerAnimationComponent.AnimationState.BANKING_RIGHT);
+        } else {
+            setAnimationState(PlayerAnimationComponent.AnimationState.IDLE);
+        }
+    }
+    
+    private void setAnimationState(PlayerAnimationComponent.AnimationState state) {
+        if (entity.hasComponent(PlayerAnimationComponent.class)) {
+            entity.getComponent(PlayerAnimationComponent.class).setState(state);
         }
     }
     

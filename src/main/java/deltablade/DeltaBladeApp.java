@@ -487,6 +487,7 @@ public class DeltaBladeApp extends GameApplication {
         if (!pc.canFire(grade)) return;
         
         pc.onFired();
+        SoundHelper.play("shot.wav");
         
         double centerX = pc.getCenterX();
         double topY = pc.getTopY();
@@ -951,6 +952,7 @@ public class DeltaBladeApp extends GameApplication {
             set(varName, 1);
             inc(GameVars.SCORE, 25);
             showBanner(String.valueOf(letter), LETTER_COLORS[letterIndex], 1.0);
+            SoundHelper.play("extra.wav");
             
             if (isExtraComplete()) {
                 inc(GameVars.LIVES, 1);
@@ -997,6 +999,7 @@ public class DeltaBladeApp extends GameApplication {
                 set(GameVars.AUTOFIRE, true);
                 inc(GameVars.SCORE, 100);
                 showBanner("AUTO", Color.CYAN, 1.2);
+                SoundHelper.play("extra.wav");
             }
             default -> {}
         }
@@ -1093,6 +1096,7 @@ public class DeltaBladeApp extends GameApplication {
         if (movingRight) {
             pc.moveRight(tpf);
         }
+        pc.updateIdle();
         
         if (waveManager != null && !waveTransition) {
             waveManager.update(tpf);

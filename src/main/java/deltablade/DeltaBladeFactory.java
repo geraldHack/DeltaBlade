@@ -6,6 +6,7 @@ import com.almasb.fxgl.entity.EntityFactory;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.Spawns;
 import deltablade.components.BulletComponent;
+import deltablade.components.CoinComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.ExplosionComponent;
 import deltablade.components.ExtraLetterPickupComponent;
@@ -520,5 +521,49 @@ public class DeltaBladeFactory implements EntityFactory {
         }, javafx.util.Duration.seconds(durationSec));
 
         return entity;
+    }
+
+    @Spawns("coin")
+    public Entity newCoin(SpawnData data) {
+        String coinTypeStr = data.hasKey("coinType") ? data.<String>get("coinType") : "white";
+        
+        CoinComponent.CoinType coinType = switch (coinTypeStr) {
+            case "green" -> CoinComponent.CoinType.GREEN;
+            case "blue" -> CoinComponent.CoinType.BLUE;
+            case "violet" -> CoinComponent.CoinType.VIOLET;
+            default -> CoinComponent.CoinType.WHITE;
+        };
+        
+        Color coinColor = switch (coinType) {
+            case WHITE -> Color.rgb(240, 240, 240);
+            case GREEN -> Color.rgb(100, 220, 100);
+            case BLUE -> Color.rgb(100, 150, 255);
+            case VIOLET -> Color.rgb(200, 100, 255);
+        };
+        
+        Color highlightColor = coinColor.brighter();
+        
+        Circle outer = new Circle(8);
+        outer.setFill(new RadialGradient(
+            0, 0, 0.3, 0.3, 0.8, true, CycleMethod.NO_CYCLE,
+            new Stop(0, highlightColor),
+            new Stop(0.5, coinColor),
+            new Stop(1, coinColor.darker())
+        ));
+        
+        Circle highlight = new Circle(3);
+        highlight.setFill(Color.rgb(255, 255, 255, 0.7));
+        highlight.setCenterX(-2);
+        highlight.setCenterY(-2);
+        
+        Group coinView = new Group(outer, highlight);
+        
+        return FXGL.entityBuilder(data)
+                .type(EntityType.COIN)
+                .viewWithBBox(coinView)
+                .zIndex(65)
+                .collidable()
+                .with(new CoinComponent(coinType))
+                .build();
     }
 }

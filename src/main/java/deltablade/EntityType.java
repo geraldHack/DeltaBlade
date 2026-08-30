@@ -6,5 +6,6 @@ public enum EntityType {
     PLAYER_BULLET,
     ENEMY_BULLET,
     PICKUP,
-    EXTRA_LETTER_PICKUP
+    EXTRA_LETTER_PICKUP,
+    COIN
 }

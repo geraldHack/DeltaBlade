@@ -127,8 +127,28 @@ public class ExplosionEditor extends Application {
     
     private String getCustomCSS() {
         return """
-            .slider .track { -fx-background-color: #21262d; -fx-background-radius: 4; }
-            .slider .thumb { -fx-background-color: #58a6ff; -fx-background-radius: 8; }
+            .slider { -fx-min-height: 20; }
+            .slider .track { 
+                -fx-background-color: #30363d; 
+                -fx-background-radius: 3; 
+                -fx-pref-height: 6; 
+                -fx-min-height: 6; 
+                -fx-border-color: #484f58; 
+                -fx-border-width: 1; 
+                -fx-border-radius: 3; 
+            }
+            .slider .thumb { 
+                -fx-background-color: #58a6ff; 
+                -fx-background-radius: 7; 
+                -fx-pref-width: 14; 
+                -fx-pref-height: 14; 
+                -fx-min-width: 14; 
+                -fx-min-height: 14; 
+                -fx-border-color: #79c0ff; 
+                -fx-border-width: 1; 
+                -fx-border-radius: 7; 
+            }
+            .slider .thumb:hover { -fx-background-color: #79c0ff; }
             .check-box .box { -fx-background-color: #21262d; -fx-border-color: #30363d; }
             .check-box:selected .mark { -fx-background-color: #58a6ff; }
             .combo-box { -fx-background-color: #21262d; -fx-border-color: #30363d; }
@@ -491,7 +511,7 @@ public class ExplosionEditor extends Application {
         loopToggle.setOnAction(e -> isLooping = loopToggle.isSelected());
         
         frameSlider = new Slider(0, 1, 0);
-        frameSlider.setPrefWidth(250);
+        frameSlider.setPrefWidth(200);
         HBox.setHgrow(frameSlider, Priority.ALWAYS);
         frameSlider.valueProperty().addListener((obs, o, n) -> {
             if (!isPlaying) {
@@ -510,7 +530,34 @@ public class ExplosionEditor extends Application {
         playbackTimeLabel.setTextFill(Color.web("#8b949e"));
         playbackTimeLabel.setMinWidth(50);
         
-        playbackPane.getChildren().addAll(playPauseBtn, restartBtn, loopToggle, frameSlider, currentFrameLabel, playbackTimeLabel);
+        Region spacer = new Region();
+        spacer.setMinWidth(20);
+        
+        Label durationLabel = new Label("Dauer:");
+        durationLabel.setFont(Font.font("Monospace", 12));
+        durationLabel.setTextFill(Color.web("#c9d1d9"));
+        
+        Slider bottomDurationSlider = new Slider(0.15, 2.0, 0.6);
+        bottomDurationSlider.setPrefWidth(100);
+        bottomDurationSlider.setMinWidth(80);
+        
+        Label durationValueLabel = new Label("0.60s");
+        durationValueLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        durationValueLabel.setTextFill(Color.web("#58a6ff"));
+        durationValueLabel.setMinWidth(45);
+        durationValueLabel.setAlignment(Pos.CENTER_RIGHT);
+        
+        bottomDurationSlider.valueProperty().bindBidirectional(durationSlider.valueProperty());
+        bottomDurationSlider.valueProperty().addListener((obs, o, n) -> {
+            durationValueLabel.setText(String.format("%.2fs", n.doubleValue()));
+        });
+        durationValueLabel.setText(String.format("%.2fs", durationSlider.getValue()));
+        
+        playbackPane.getChildren().addAll(
+            playPauseBtn, restartBtn, loopToggle, frameSlider, 
+            currentFrameLabel, playbackTimeLabel,
+            spacer, durationLabel, bottomDurationSlider, durationValueLabel
+        );
         
         bottom.getChildren().add(playbackPane);
         return bottom;

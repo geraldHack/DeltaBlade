@@ -1094,6 +1094,8 @@ public class DeltaBladeApp extends GameApplication {
             pc.moveRight(tpf);
         }
         
+        pc.updateIdle();
+        
         if (waveManager != null && !waveTransition) {
             waveManager.update(tpf);
         }

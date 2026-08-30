@@ -1,0 +1,104 @@
+package deltablade.components;
+
+import com.almasb.fxgl.entity.component.Component;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+
+/**
+ * Component that handles animated sprite sheets for the player ship.
+ * Supports three animation states:
+ * - IDLE/THRUSTER: default yellow rear exhaust (plays continuously)
+ * - MOVING_UP: cyan bow wave at the nose (currently unused, ready for future)
+ * - BANKING: ship tilts left/right when strafing
+ * 
+ * Each sprite sheet is 384x48 (8 frames of 48x48, 120ms per frame, looped).
+ */
+public class PlayerAnimationComponent extends Component {
+
+    public enum AnimationState {
+        IDLE,
+        BANKING_LEFT,
+        BANKING_RIGHT,
+        MOVING_UP
+    }
+
+    private final ImageView imageView;
+    private final Image thrusterSheet;
+    private final Image bankSheet;
+    private final Image bowwaveSheet;
+
+    private static final int FRAME_COUNT = 8;
+    private static final int FRAME_WIDTH = 48;
+    private static final int FRAME_HEIGHT = 48;
+    private static final double FRAME_DURATION = 0.120;
+
+    private AnimationState currentState = AnimationState.IDLE;
+    private double elapsed = 0;
+    private int currentFrame = 0;
+
+    private Image currentSheet;
+
+    public PlayerAnimationComponent(Image thrusterSheet, Image bankSheet, Image bowwaveSheet) {
+        this.thrusterSheet = thrusterSheet;
+        this.bankSheet = bankSheet;
+        this.bowwaveSheet = bowwaveSheet;
+        this.currentSheet = thrusterSheet;
+
+        this.imageView = new ImageView(thrusterSheet);
+        this.imageView.setFitWidth(FRAME_WIDTH);
+        this.imageView.setFitHeight(FRAME_HEIGHT);
+        this.imageView.setSmooth(false);
+        this.imageView.setPreserveRatio(false);
+        this.imageView.setViewport(new Rectangle2D(0, 0, FRAME_WIDTH, FRAME_HEIGHT));
+    }
+
+    public ImageView getView() {
+        return imageView;
+    }
+
+    public void setState(AnimationState newState) {
+        if (currentState != newState) {
+            currentState = newState;
+            Image newSheet = getSheetForState(newState);
+            if (newSheet != currentSheet) {
+                currentSheet = newSheet;
+                imageView.setImage(currentSheet);
+            }
+        }
+    }
+
+    public AnimationState getState() {
+        return currentState;
+    }
+
+    private Image getSheetForState(AnimationState state) {
+        return switch (state) {
+            case BANKING_LEFT, BANKING_RIGHT -> bankSheet != null ? bankSheet : thrusterSheet;
+            case MOVING_UP -> bowwaveSheet != null ? bowwaveSheet : thrusterSheet;
+            default -> thrusterSheet;
+        };
+    }
+
+    @Override
+    public void onUpdate(double tpf) {
+        elapsed += tpf;
+
+        int newFrame = (int) (elapsed / FRAME_DURATION) % FRAME_COUNT;
+
+        if (newFrame != currentFrame) {
+            currentFrame = newFrame;
+            
+            int frameX = currentFrame * FRAME_WIDTH;
+            imageView.setViewport(new Rectangle2D(frameX, 0, FRAME_WIDTH, FRAME_HEIGHT));
+        }
+    }
+
+    public int getFrameWidth() {
+        return FRAME_WIDTH;
+    }
+
+    public int getFrameHeight() {
+        return FRAME_HEIGHT;
+    }
+}

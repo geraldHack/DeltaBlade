@@ -1152,6 +1152,43 @@ public class DeltaBladeApp extends GameApplication {
         autoLampText.setTranslateY(autoY + 10);
         getGameScene().addUINode(autoLampText);
         
+        int moneyY = autoY + 22;
+        Text moneyLabel = new Text();
+        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        moneyLabel.setFill(Color.GOLD);
+        moneyLabel.setTranslateX(xOffset);
+        moneyLabel.setTranslateY(moneyY);
+        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
+        DropShadow moneyShadow = new DropShadow(2, Color.BLACK);
+        moneyLabel.setEffect(moneyShadow);
+        getGameScene().addUINode(moneyLabel);
+        
+        int legendY = moneyY + 14;
+        int legendRowH = 12;
+        Color[] legendColors = {
+            Color.rgb(240, 240, 240),
+            Color.rgb(100, 220, 100),
+            Color.rgb(100, 150, 255),
+            Color.rgb(200, 100, 255)
+        };
+        int[] legendValues = {10, 50, 100, 1000};
+        for (int i = 0; i < 4; i++) {
+            Circle dot = new Circle(4);
+            dot.setFill(legendColors[i]);
+            dot.setCenterX(xOffset + 4);
+            dot.setCenterY(legendY + i * legendRowH);
+            getGameScene().addUINode(dot);
+            
+            Text valueText = new Text("$" + legendValues[i]);
+            valueText.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+            valueText.setFill(Color.GOLD);
+            valueText.setTranslateX(xOffset + 12);
+            valueText.setTranslateY(legendY + i * legendRowH + 3);
+            DropShadow legendShadow = new DropShadow(1, Color.BLACK);
+            valueText.setEffect(legendShadow);
+            getGameScene().addUINode(valueText);
+        }
+        
         getip(GameVars.ACTIVE_BULLETS).addListener((obs, o, n) -> updateBars());
         getip(GameVars.AMMO_CAP).addListener((obs, o, n) -> updateBars());
         getip(GameVars.WEAPON_GRADE).addListener((obs, o, n) -> updateBars());
@@ -1173,16 +1210,6 @@ public class DeltaBladeApp extends GameApplication {
         scoreLabel.setEffect(scoreShadow);
         getGameScene().addUINode(scoreLabel);
         
-        Text moneyLabel = new Text();
-        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
-        moneyLabel.setFill(Color.GOLD);
-        moneyLabel.setTranslateX(railWidth + 130);
-        moneyLabel.setTranslateY(hudY);
-        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
-        
-        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
-        moneyLabel.setEffect(moneyShadow);
-        getGameScene().addUINode(moneyLabel);
         
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 11));

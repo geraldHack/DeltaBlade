@@ -11,6 +11,7 @@ import deltablade.components.EnemyComponent;
 import deltablade.components.ExplosionComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
+import deltablade.components.PlayerAnimationComponent;
 import deltablade.components.PlayerComponent;
 import deltablade.components.StarComponent;
 import javafx.scene.Group;
@@ -55,6 +56,24 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
+        Image thrusterSheet = EmbeddedTextures.getImage("player_blue_thruster.png", 384, 48);
+        Image bankSheet = EmbeddedTextures.getImage("player_blue_bank.png", 384, 48);
+        Image bowwaveSheet = EmbeddedTextures.getImage("player_blue_bowwave.png", 384, 48);
+        
+        if (thrusterSheet != null && !thrusterSheet.isError()) {
+            PlayerAnimationComponent animComp = new PlayerAnimationComponent(thrusterSheet, bankSheet, bowwaveSheet);
+            ImageView view = animComp.getView();
+            
+            return FXGL.entityBuilder(data)
+                    .type(EntityType.PLAYER)
+                    .viewWithBBox(view)
+                    .zIndex(100)
+                    .collidable()
+                    .with(new PlayerComponent())
+                    .with(animComp)
+                    .build();
+        }
+        
         return FXGL.entityBuilder(data)
                 .type(EntityType.PLAYER)
                 .viewWithBBox(safeTexture("player.png", SHIP_SIZE, SHIP_SIZE, Color.DODGERBLUE))

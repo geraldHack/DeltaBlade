@@ -952,7 +952,6 @@ public class DeltaBladeApp extends GameApplication {
             set(varName, 1);
             inc(GameVars.SCORE, 25);
             showBanner(String.valueOf(letter), LETTER_COLORS[letterIndex], 1.0);
-            SoundHelper.play("extra.wav");
             
             if (isExtraComplete()) {
                 inc(GameVars.LIVES, 1);
@@ -987,6 +986,7 @@ public class DeltaBladeApp extends GameApplication {
                 }
                 inc(GameVars.SCORE, 50);
                 showBanner("WAFFE", Color.GOLD, 1.2);
+                SoundHelper.play("weapon.wav");
             }
             case EXTRA_AMMO -> {
                 if (geti(GameVars.AMMO_CAP) < GameVars.MAX_AMMO_CAP) {
@@ -994,12 +994,13 @@ public class DeltaBladeApp extends GameApplication {
                 }
                 inc(GameVars.SCORE, 25);
                 showBanner("MUNI", Color.CYAN, 1.2);
+                SoundHelper.play("ammo.wav");
             }
             case AUTOFIRE -> {
                 set(GameVars.AUTOFIRE, true);
                 inc(GameVars.SCORE, 100);
                 showBanner("AUTO", Color.CYAN, 1.2);
-                SoundHelper.play("extra.wav");
+                SoundHelper.play("autofire.wav");
             }
             default -> {}
         }

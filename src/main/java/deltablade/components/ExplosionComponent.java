@@ -56,6 +56,14 @@ public class ExplosionComponent extends Component {
         return imageView;
     }
 
+    /**
+     * Sets the display size of the explosion, independent of frame size.
+     */
+    public void setDisplaySize(int width, int height) {
+        this.imageView.setFitWidth(width);
+        this.imageView.setFitHeight(height);
+    }
+
     @Override
     public void onUpdate(double tpf) {
         if (finished) {

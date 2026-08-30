@@ -127,14 +127,72 @@ DeltaBlade/
 │   ├── WaveManager.java                 # Squad spawning and combo system
 │   ├── EntityType.java                  # Entity type enum
 │   ├── GameVars.java                    # Game variables/constants
-│   └── components/
-│       ├── PlayerComponent.java         # Player movement, firing, i-frames
-│       ├── EnemyComponent.java          # Enemy AI: entry, formation, diving
-│       ├── BulletComponent.java         # Projectile movement
-│       ├── PickupComponent.java         # Collectible behavior
-│       └── ExplosionComponent.java      # Animated sprite strip playback
-└── src/main/resources/                  # Resources (empty for now)
+│   ├── EmbeddedTextures.java            # PNG decoder (8-bit RGBA only)
+│   ├── components/
+│   │   ├── PlayerComponent.java         # Player movement, firing, i-frames
+│   │   ├── EnemyComponent.java          # Enemy AI: entry, formation, diving
+│   │   ├── BulletComponent.java         # Projectile movement
+│   │   ├── PickupComponent.java         # Collectible behavior
+│   │   └── ExplosionComponent.java      # Animated sprite strip playback
+│   └── tools/
+│       └── ExplosionEditor.java         # Standalone explosion sprite editor
+└── src/main/resources/                  # Resources
 ```
+
+---
+
+## 🎆 Explosion Editor / Explosions-Editor
+
+A standalone tool for authoring procedural pixel-art explosions and exporting them as animated sprite sheets.
+
+Explosions are already integrated in-game via `ExplosionComponent`. Use this editor to create custom explosion effects.
+
+### 🇬🇧 Running the Editor (English)
+
+```bash
+mvn javafx:run -Pexplosions
+```
+
+### Features
+- **Live 60fps preview** with nearest-neighbor rendering (pixel-art style)
+- **Parameter controls**: Duration, frame count, frame size (32/48/64/96), particle count, size over lifetime, color gradient (core/mid/smoke), gravity, outward velocity, drag
+- **Layer toggles**: Fire, Sparks, Smoke, Shockwave
+- **Presets**: Hit (tiny sparks), Ship (medium fire+debris), Tough (fatter orange), Boss (big multi-layer), Plasma (cyan/magenta), Sparks
+- **Playback controls**: Play, Pause, Restart, frame scrubbing, loop toggle
+- **Seed control**: Reproducible explosions via seed field + Randomize button
+
+### Exporting
+1. **Sprite Sheet**: Click "Sprite Sheet exportieren..." → saves PNG + JSON sidecar
+2. **Individual Frames**: Click "Einzelframes exportieren..." → saves numbered PNGs + JSON
+
+Exported PNGs are **8-bit RGBA, non-interlaced** (color type 6), compatible with the game's `EmbeddedTextures.decodePng()`.
+
+### In-Game Integration
+Explosions are played via `ExplosionComponent`. To add custom sheets, embed them in `EmbeddedTextures` with keys like `explosion_custom.png` and spawn via:
+```java
+spawn("explosion", new SpawnData(x, y).put("variant", "custom"));
+```
+
+### 🇩🇪 Editor starten (Deutsch)
+
+```bash
+mvn javafx:run -Pexplosions
+```
+
+### Funktionen
+- **Live 60fps Vorschau** mit Nearest-Neighbor Rendering (Pixel-Art Stil)
+- **Parameter**: Dauer, Frame-Anzahl, Frame-Größe, Partikelzahl, Größe über Lebenszeit, Farbverlauf (Kern/Mitte/Rauch), Gravity, Outward-Velocity, Drag
+- **Layer-Toggles**: Feuer, Funken, Rauch, Schockwelle
+- **Presets**: Treffer, Schiff, Tough, Boss, Plasma, Funken
+- **Playback**: Play, Pause, Restart, Frame-Scrubbing, Loop
+
+### Exportieren
+1. **Sprite Sheet**: "Sprite Sheet exportieren..." → PNG + JSON Metadaten
+2. **Einzelframes**: "Einzelframes exportieren..." → nummerierte PNGs + JSON
+
+Exportierte PNGs sind **8-bit RGBA, nicht-interlaced** — kompatibel mit `EmbeddedTextures.decodePng()`.
+
+---
 
 ## Building
 

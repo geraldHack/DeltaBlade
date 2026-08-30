@@ -61,6 +61,8 @@ public class DeltaBladeApp extends GameApplication {
     private List<Animation> extraLetterAnimations = new ArrayList<>();
     private List<Node> activeBanners = new ArrayList<>();
     
+    private Timeline activeShake = null;
+    
     @Override
     protected void initSettings(GameSettings settings) {
         settings.setWidth(800);
@@ -534,10 +536,13 @@ public class DeltaBladeApp extends GameApplication {
         ring.setFill(Color.TRANSPARENT);
         ring.setStroke(Color.rgb(255, 200, 100, 0.9));
         ring.setStrokeWidth(4);
-        ring.setCenterX(centerX);
-        ring.setCenterY(centerY);
         
-        getGameScene().addUINode(ring);
+        Entity shockwaveEntity = entityBuilder()
+                .at(centerX, centerY)
+                .view(ring)
+                .zIndex(95)
+                .build();
+        getGameWorld().addEntity(shockwaveEntity);
         
         ScaleTransition scale = new ScaleTransition(Duration.seconds(duration), ring);
         scale.setFromX(1.0);
@@ -556,47 +561,79 @@ public class DeltaBladeApp extends GameApplication {
         );
         
         ParallelTransition combo = new ParallelTransition(scale, fade, strokeFade);
-        combo.setOnFinished(e -> getGameScene().removeUINode(ring));
+        combo.setOnFinished(e -> {
+            if (shockwaveEntity.isActive()) {
+                shockwaveEntity.removeFromWorld();
+            }
+        });
         combo.play();
     }
     
     private void triggerScreenShake(String size) {
-        double intensity = "big".equals(size) ? 14 : 8;
-        double shakeDuration = 0.2;
-        int shakeSteps = 6;
+        double intensity = "big".equals(size) ? 12 : 6;
+        double shakeDuration = 0.18;
+        int shakeSteps = 5;
         double stepDuration = shakeDuration / shakeSteps;
         
-        Node root = getGameScene().getRoot();
-        double originalX = root.getTranslateX();
-        double originalY = root.getTranslateY();
+        if (activeShake != null) {
+            activeShake.stop();
+        }
+        
+        var viewport = getGameScene().getViewport();
+        viewport.setX(0);
+        viewport.setY(0);
         
         Timeline shake = new Timeline();
         for (int i = 0; i < shakeSteps; i++) {
-            double offsetX = (random.nextDouble() - 0.5) * 2 * intensity * (1.0 - (double) i / shakeSteps);
-            double offsetY = (random.nextDouble() - 0.5) * 2 * intensity * (1.0 - (double) i / shakeSteps);
+            double decay = 1.0 - (double) i / shakeSteps;
+            final double offsetX = (random.nextDouble() - 0.5) * 2 * intensity * decay;
+            final double offsetY = (random.nextDouble() - 0.5) * 2 * intensity * decay;
             shake.getKeyFrames().add(new KeyFrame(Duration.seconds(i * stepDuration),
-                new KeyValue(root.translateXProperty(), originalX + offsetX),
-                new KeyValue(root.translateYProperty(), originalY + offsetY)
+                e -> {
+                    viewport.setX(offsetX);
+                    viewport.setY(offsetY);
+                }
             ));
         }
         shake.getKeyFrames().add(new KeyFrame(Duration.seconds(shakeDuration),
-            new KeyValue(root.translateXProperty(), originalX),
-            new KeyValue(root.translateYProperty(), originalY)
+            e -> {
+                viewport.setX(0);
+                viewport.setY(0);
+            }
         ));
+        
+        shake.setOnFinished(e -> {
+            viewport.setX(0);
+            viewport.setY(0);
+            if (activeShake == shake) {
+                activeShake = null;
+            }
+        });
+        
+        activeShake = shake;
         shake.play();
     }
     
     private void spawnFlashOverlay() {
-        Rectangle flash = new Rectangle(getAppWidth(), getAppHeight());
-        flash.setFill(Color.rgb(255, 220, 180, 0.12));
+        Rectangle flash = new Rectangle(getAppWidth() + 40, getAppHeight() + 40);
+        flash.setFill(Color.rgb(255, 220, 180, 0.10));
         flash.setMouseTransparent(true);
         
-        getGameScene().addUINode(flash);
+        Entity flashEntity = entityBuilder()
+                .at(-20, -20)
+                .view(flash)
+                .zIndex(500)
+                .build();
+        getGameWorld().addEntity(flashEntity);
         
         FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
         fadeOut.setFromValue(1.0);
         fadeOut.setToValue(0.0);
-        fadeOut.setOnFinished(e -> getGameScene().removeUINode(flash));
+        fadeOut.setOnFinished(e -> {
+            if (flashEntity.isActive()) {
+                flashEntity.removeFromWorld();
+            }
+        });
         fadeOut.play();
     }
     
@@ -609,15 +646,22 @@ public class DeltaBladeApp extends GameApplication {
         Rectangle flash = new Rectangle(ew + 10, eh + 10);
         flash.setFill(Color.rgb(255, 255, 255, 0.6));
         flash.setMouseTransparent(true);
-        flash.setTranslateX(ex - 5);
-        flash.setTranslateY(ey - 5);
         
-        getGameScene().addUINode(flash);
+        Entity flashEntity = entityBuilder()
+                .at(ex - 5, ey - 5)
+                .view(flash)
+                .zIndex(160)
+                .build();
+        getGameWorld().addEntity(flashEntity);
         
         FadeTransition fadeOut = new FadeTransition(Duration.seconds(0.08), flash);
         fadeOut.setFromValue(1.0);
         fadeOut.setToValue(0.0);
-        fadeOut.setOnFinished(e -> getGameScene().removeUINode(flash));
+        fadeOut.setOnFinished(e -> {
+            if (flashEntity.isActive()) {
+                flashEntity.removeFromWorld();
+            }
+        });
         fadeOut.play();
     }
     
@@ -666,13 +710,15 @@ public class DeltaBladeApp extends GameApplication {
                 double deathY = enemy.getY() + enemy.getHeight() / 2;
                 
                 boolean isBoss = ec.isBoss();
-                String explosionSize = (isBoss || ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
-                spawnExplosion(deathX, deathY, explosionSize);
                 
                 if (isBoss) {
-                    spawnBossCoins(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2);
+                    spawnBossDeathSequence(deathX, deathY);
+                    spawnBossCoins(deathX, deathY);
                 } else {
-                    trySpawnPickup(enemy.getX() + enemy.getWidth() / 2, enemy.getY() + enemy.getHeight() / 2, ec.getType());
+                    String explosionSize = (ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
+                    spawnExplosion(deathX, deathY, explosionSize);
+                    SoundHelper.play("explode_ship.wav");
+                    trySpawnPickup(deathX, deathY, ec.getType());
                 }
                 
                 enemy.removeFromWorld();
@@ -713,6 +759,7 @@ public class DeltaBladeApp extends GameApplication {
             deltablade.components.CoinComponent cc = coin.getComponent(deltablade.components.CoinComponent.class);
             inc(GameVars.MONEY, cc.getValue());
             coin.removeFromWorld();
+            SoundHelper.play("money.wav");
         });
     }
     
@@ -726,6 +773,7 @@ public class DeltaBladeApp extends GameApplication {
             double explosionX = player.getX() + player.getWidth() / 2;
             double explosionY = player.getY() + player.getHeight() / 2;
             spawnExplosion(explosionX, explosionY, "ship");
+            SoundHelper.play("explode_ship.wav");
         }
         
         if (geti(GameVars.WEAPON_GRADE) > 1) {
@@ -833,6 +881,36 @@ public class DeltaBladeApp extends GameApplication {
             }
             spawnCoin(x + offsetX, y + offsetY, type);
         }
+    }
+    
+    /**
+     * Boss death: 3-5 staggered big explosions with irregular audio.
+     * First explosion is immediate with shockwave/flash; others are subdued.
+     */
+    private void spawnBossDeathSequence(double centerX, double centerY) {
+        int boomCount = 3 + random.nextInt(3);
+        
+        spawnExplosion(centerX, centerY, "big");
+        SoundHelper.play("explode_boss.wav");
+        
+        double accumulatedDelay = 0;
+        for (int i = 1; i < boomCount; i++) {
+            double delay = 0.08 + random.nextDouble() * 0.27;
+            accumulatedDelay += delay;
+            
+            final double offsetX = (random.nextDouble() - 0.5) * 90;
+            final double offsetY = (random.nextDouble() - 0.5) * 70;
+            final double finalDelay = accumulatedDelay;
+            
+            runOnce(() -> {
+                spawnBossFollowupExplosion(centerX + offsetX, centerY + offsetY);
+                SoundHelper.play("explode_boss.wav");
+            }, Duration.seconds(finalDelay));
+        }
+    }
+    
+    private void spawnBossFollowupExplosion(double x, double y) {
+        spawn("explosion", new com.almasb.fxgl.entity.SpawnData(x, y).put("size", "big"));
     }
     
     private void collectExtraLetter(char letter, int letterIndex) {
@@ -944,6 +1022,13 @@ public class DeltaBladeApp extends GameApplication {
     
     private void restartGame() {
         stopExtraLetterAnimations();
+        if (activeShake != null) {
+            activeShake.stop();
+            activeShake = null;
+        }
+        var viewport = getGameScene().getViewport();
+        viewport.setX(0);
+        viewport.setY(0);
         getGameController().startNewGame();
     }
     
@@ -987,8 +1072,6 @@ public class DeltaBladeApp extends GameApplication {
     private Rectangle ammoBar;
     private Rectangle weaponBar;
     private Rectangle livesBar;
-    private Text ammoNumericLabel;
-    private Text weaponNumericLabel;
     private Rectangle autoLamp;
     private Text autoLampText;
     
@@ -1040,13 +1123,6 @@ public class DeltaBladeApp extends GameApplication {
         getGameScene().addUINode(ammoBarBg);
         getGameScene().addUINode(ammoBar);
         
-        ammoNumericLabel = new Text();
-        ammoNumericLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
-        ammoNumericLabel.setFill(Color.WHITE);
-        ammoNumericLabel.setTranslateX(xOffset + labelOffset + barWidth + 2);
-        ammoNumericLabel.setTranslateY(barsY + barHeight - 1);
-        getGameScene().addUINode(ammoNumericLabel);
-        
         Text weaponLabelW = new Text("W");
         weaponLabelW.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
         weaponLabelW.setFill(Color.ORANGE);
@@ -1058,13 +1134,6 @@ public class DeltaBladeApp extends GameApplication {
         weaponBar = createStatusBar(xOffset + labelOffset + 1, barsY + barSpacing + 1, barWidth - 2, barHeight - 2, Color.ORANGE);
         getGameScene().addUINode(weaponBarBg);
         getGameScene().addUINode(weaponBar);
-        
-        weaponNumericLabel = new Text();
-        weaponNumericLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
-        weaponNumericLabel.setFill(Color.WHITE);
-        weaponNumericLabel.setTranslateX(xOffset + labelOffset + barWidth + 2);
-        weaponNumericLabel.setTranslateY(barsY + barSpacing + barHeight - 1);
-        getGameScene().addUINode(weaponNumericLabel);
         
         Rectangle livesBarBg = createBarBackground(xOffset + labelOffset, barsY + barSpacing * 2, barWidth, barHeight);
         livesBar = createStatusBar(xOffset + labelOffset + 1, barsY + barSpacing * 2 + 1, barWidth - 2, barHeight - 2, Color.LIMEGREEN);
@@ -1250,17 +1319,9 @@ public class DeltaBladeApp extends GameApplication {
         double ammoRatio = cap > 0 ? (double) available / cap : 0;
         ammoBar.setWidth(Math.max(1, barWidth * ammoRatio));
         
-        if (ammoNumericLabel != null) {
-            ammoNumericLabel.setText(available + "/" + cap);
-        }
-        
         int weapon = geti(GameVars.WEAPON_GRADE);
         double weaponRatio = (double) weapon / GameVars.MAX_WEAPON_GRADE;
         weaponBar.setWidth(Math.max(1, barWidth * weaponRatio));
-        
-        if (weaponNumericLabel != null) {
-            weaponNumericLabel.setText(String.valueOf(weapon));
-        }
         
         int lives = geti(GameVars.LIVES);
         double livesRatio = Math.min(1.0, (double) lives / 5);

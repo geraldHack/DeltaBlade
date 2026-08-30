@@ -529,6 +529,36 @@ public class DeltaBladeApp extends GameApplication {
         }
     }
     
+    private void spawnChipDamageSparks(double hitX, double hitY) {
+        for (int i = 0; i < 2; i++) {
+            double offsetX = (random.nextDouble() - 0.5) * 2 * (8 + random.nextDouble() * 10);
+            double offsetY = (random.nextDouble() - 0.5) * 2 * (8 + random.nextDouble() * 10);
+            long delayMs = (long) (random.nextDouble() * 50);
+            
+            runOnce(() -> {
+                spawnExplosion(hitX + offsetX, hitY + offsetY, "hit");
+            }, Duration.millis(delayMs));
+        }
+    }
+    
+    private void flashEnemySprite(Entity enemy) {
+        if (enemy == null || !enemy.isActive()) return;
+        
+        Node view = enemy.getViewComponent().getChildren().isEmpty() 
+            ? null : enemy.getViewComponent().getChildren().get(0);
+        if (view == null) return;
+        
+        javafx.scene.effect.ColorAdjust flash = new javafx.scene.effect.ColorAdjust();
+        flash.setBrightness(0.7);
+        view.setEffect(flash);
+        
+        runOnce(() -> {
+            if (enemy.isActive()) {
+                view.setEffect(null);
+            }
+        }, Duration.millis(80));
+    }
+    
     private void spawnShockwaveRing(double centerX, double centerY, String size) {
         double maxRadius = "big".equals(size) ? 160 : 110;
         double duration = "big".equals(size) ? 0.35 : 0.25;
@@ -691,7 +721,16 @@ public class DeltaBladeApp extends GameApplication {
             double hitX = bullet.getX() + bullet.getWidth() / 2;
             double hitY = bullet.getY() + bullet.getHeight() / 2;
             
-            spawnExplosion(hitX, hitY, "hit");
+            boolean isToughOrBoss = ec.getType() == EnemyComponent.EnemyType.TOUGH || ec.isBoss();
+            boolean isNonFatal = !ec.isDead();
+            
+            if (isToughOrBoss && isNonFatal) {
+                spawnExplosion(hitX, hitY, "boss_hit");
+                spawnChipDamageSparks(hitX, hitY);
+                flashEnemySprite(enemy);
+            } else {
+                spawnExplosion(hitX, hitY, "hit");
+            }
             
             if (ec.isDead()) {
                 inc(GameVars.SCORE, ec.getScoreValue());
@@ -1152,6 +1191,43 @@ public class DeltaBladeApp extends GameApplication {
         autoLampText.setTranslateY(autoY + 10);
         getGameScene().addUINode(autoLampText);
         
+        int moneyY = autoY + 22;
+        Text moneyLabel = new Text();
+        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        moneyLabel.setFill(Color.GOLD);
+        moneyLabel.setTranslateX(xOffset);
+        moneyLabel.setTranslateY(moneyY);
+        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
+        DropShadow moneyShadow = new DropShadow(2, Color.BLACK);
+        moneyLabel.setEffect(moneyShadow);
+        getGameScene().addUINode(moneyLabel);
+        
+        int legendY = moneyY + 14;
+        int legendRowH = 12;
+        Color[] legendColors = {
+            Color.rgb(240, 240, 240),
+            Color.rgb(100, 220, 100),
+            Color.rgb(100, 150, 255),
+            Color.rgb(200, 100, 255)
+        };
+        int[] legendValues = {10, 50, 100, 1000};
+        for (int i = 0; i < 4; i++) {
+            Circle dot = new Circle(4);
+            dot.setFill(legendColors[i]);
+            dot.setCenterX(xOffset + 4);
+            dot.setCenterY(legendY + i * legendRowH);
+            getGameScene().addUINode(dot);
+            
+            Text valueText = new Text("$" + legendValues[i]);
+            valueText.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+            valueText.setFill(Color.GOLD);
+            valueText.setTranslateX(xOffset + 12);
+            valueText.setTranslateY(legendY + i * legendRowH + 3);
+            DropShadow legendShadow = new DropShadow(1, Color.BLACK);
+            valueText.setEffect(legendShadow);
+            getGameScene().addUINode(valueText);
+        }
+        
         getip(GameVars.ACTIVE_BULLETS).addListener((obs, o, n) -> updateBars());
         getip(GameVars.AMMO_CAP).addListener((obs, o, n) -> updateBars());
         getip(GameVars.WEAPON_GRADE).addListener((obs, o, n) -> updateBars());
@@ -1173,16 +1249,6 @@ public class DeltaBladeApp extends GameApplication {
         scoreLabel.setEffect(scoreShadow);
         getGameScene().addUINode(scoreLabel);
         
-        Text moneyLabel = new Text();
-        moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
-        moneyLabel.setFill(Color.GOLD);
-        moneyLabel.setTranslateX(railWidth + 130);
-        moneyLabel.setTranslateY(hudY);
-        moneyLabel.textProperty().bind(getip(GameVars.MONEY).asString("$%d"));
-        
-        DropShadow moneyShadow = new DropShadow(3, Color.BLACK);
-        moneyLabel.setEffect(moneyShadow);
-        getGameScene().addUINode(moneyLabel);
         
         Text levelLabel = new Text();
         levelLabel.setFont(Font.font("Monospace", 11));

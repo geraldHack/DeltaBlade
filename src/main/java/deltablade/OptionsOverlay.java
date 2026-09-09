@@ -1,17 +1,17 @@
 package deltablade;
 
-import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.control.Button;
-import javafx.scene.control.Slider;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
@@ -21,6 +21,7 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 
 import java.util.List;
+import java.util.function.DoubleConsumer;
 
 import static com.almasb.fxgl.dsl.FXGL.getAppHeight;
 import static com.almasb.fxgl.dsl.FXGL.getAppWidth;
@@ -70,11 +71,9 @@ public final class OptionsOverlay {
                     + "-fx-border-radius: 8;"
                     + "-fx-cursor: hand;";
 
-    private static boolean stylesheetAdded;
-
     private final Group root = new Group();
     private Button musicToggle;
-    private Slider volumeSlider;
+    private VolumeBar volumeBar;
     private Text volumeValue;
     private Text trackName;
     private Button prevTrack;
@@ -122,25 +121,22 @@ public final class OptionsOverlay {
         HBox musicRow = labeledRow("Hintergrundmusik", musicToggle);
 
         volumeValue = new Text();
-        volumeValue.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        volumeValue.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
         volumeValue.setFill(Color.rgb(180, 240, 255));
-        volumeValue.setWrappingWidth(48);
+        volumeValue.setWrappingWidth(52);
 
-        volumeSlider = new Slider(0, 100, OptionsStore.getMusicVolume() * 100.0);
-        volumeSlider.getStyleClass().add("options-slider");
-        volumeSlider.setPrefWidth(220);
-        HBox.setHgrow(volumeSlider, Priority.ALWAYS);
-        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            double volume = newVal.doubleValue() / 100.0;
+        volumeBar = new VolumeBar(280, 36);
+        volumeBar.setValue(OptionsStore.getMusicVolume());
+        volumeBar.setOnLive(this::applyVolumeLive);
+        volumeBar.setOnCommit(volume -> {
             OptionsStore.setMusicVolume(volume);
-            MusicHelper.setVolume(volume);
-            volumeValue.setText(Math.round(newVal.doubleValue()) + "%");
+            applyVolumeLive(volume);
         });
-        volumeValue.setText(Math.round(volumeSlider.getValue()) + "%");
+        volumeValue.setText(Math.round(volumeBar.getValue() * 100) + "%");
 
-        HBox volumeControls = new HBox(10, volumeSlider, volumeValue);
+        HBox volumeControls = new HBox(14, volumeBar, volumeValue);
         volumeControls.setAlignment(Pos.CENTER_LEFT);
-        VBox volumeBlock = new VBox(6, sectionLabel("Lautstärke"), volumeControls);
+        VBox volumeBlock = new VBox(8, sectionLabel("Lautstärke"), volumeControls);
 
         trackName = new Text();
         trackName.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
@@ -168,11 +164,15 @@ public final class OptionsOverlay {
 
         root.getChildren().addAll(dimmer, panel, accent, content);
         refreshControls();
-        ensureStylesheet();
     }
 
     public Group getRoot() {
         return root;
+    }
+
+    private void applyVolumeLive(double volume) {
+        MusicHelper.setVolume(volume);
+        volumeValue.setText(Math.round(volume * 100) + "%");
     }
 
     private void toggleMusic() {
@@ -197,7 +197,7 @@ public final class OptionsOverlay {
         musicToggle.setText(enabled ? "AN" : "AUS");
         musicToggle.setStyle(enabled ? TOGGLE_ON : TOGGLE_OFF);
 
-        volumeSlider.setDisable(!enabled);
+        volumeBar.setBarDisabled(!enabled);
         volumeValue.setOpacity(enabled ? 1.0 : 0.45);
 
         MusicHelper.Track track = MusicHelper.find(OptionsStore.getSelectedTrackId());
@@ -247,24 +247,121 @@ public final class OptionsOverlay {
         return button;
     }
 
-    private static void ensureStylesheet() {
-        if (stylesheetAdded) {
-            return;
+    /**
+     * Fat click-and-drag bar: large hit target, live volume, persist on release.
+     */
+    private static final class VolumeBar extends Group {
+        private static final double TRACK_HEIGHT = 12;
+        private static final double THUMB_RADIUS = 11;
+
+        private final double width;
+        private final double height;
+        private final Rectangle fill;
+        private final Circle thumb;
+        private double value;
+        private boolean disabled;
+        private DoubleConsumer onLive = v -> {};
+        private DoubleConsumer onCommit = v -> {};
+
+        VolumeBar(double width, double height) {
+            this.width = width;
+            this.height = height;
+
+            Rectangle hit = new Rectangle(width, height);
+            hit.setFill(Color.rgb(8, 16, 28, 0.35));
+            hit.setArcWidth(10);
+            hit.setArcHeight(10);
+            hit.setStroke(Color.rgb(74, 144, 217, 0.55));
+            hit.setStrokeWidth(1);
+
+            double trackY = (height - TRACK_HEIGHT) / 2.0;
+            Rectangle track = new Rectangle(width - 16, TRACK_HEIGHT);
+            track.setArcWidth(TRACK_HEIGHT);
+            track.setArcHeight(TRACK_HEIGHT);
+            track.setFill(Color.rgb(26, 48, 80));
+            track.setTranslateX(8);
+            track.setTranslateY(trackY);
+
+            fill = new Rectangle(0, TRACK_HEIGHT);
+            fill.setArcWidth(TRACK_HEIGHT);
+            fill.setArcHeight(TRACK_HEIGHT);
+            fill.setFill(Color.rgb(78, 205, 196));
+            fill.setTranslateX(8);
+            fill.setTranslateY(trackY);
+
+            thumb = new Circle(THUMB_RADIUS);
+            thumb.setFill(Color.rgb(78, 205, 196));
+            thumb.setStroke(Color.rgb(159, 249, 242));
+            thumb.setStrokeWidth(2);
+            thumb.setTranslateY(height / 2.0);
+            thumb.setMouseTransparent(true);
+            fill.setMouseTransparent(true);
+            track.setMouseTransparent(true);
+
+            getChildren().addAll(hit, track, fill, thumb);
+            setCursor(javafx.scene.Cursor.HAND);
+
+            hit.setOnMousePressed(this::onPointer);
+            hit.setOnMouseDragged(this::onPointer);
+            hit.setOnMouseReleased(e -> {
+                if (disabled) {
+                    return;
+                }
+                applyFromEvent(e, false);
+                onCommit.accept(value);
+            });
+
+            layoutValue();
         }
-        Platform.runLater(() -> {
-            var scene = javafx.stage.Stage.getWindows().stream()
-                    .filter(window -> window.isShowing() && window.getScene() != null)
-                    .map(javafx.stage.Window::getScene)
-                    .findFirst()
-                    .orElse(null);
-            if (scene == null) {
+
+        void setOnLive(DoubleConsumer consumer) {
+            this.onLive = consumer != null ? consumer : v -> {};
+        }
+
+        void setOnCommit(DoubleConsumer consumer) {
+            this.onCommit = consumer != null ? consumer : v -> {};
+        }
+
+        void setValue(double volume) {
+            this.value = clamp01(volume);
+            layoutValue();
+        }
+
+        double getValue() {
+            return value;
+        }
+
+        void setBarDisabled(boolean disabled) {
+            this.disabled = disabled;
+            setOpacity(disabled ? 0.4 : 1.0);
+            setCursor(disabled ? javafx.scene.Cursor.DEFAULT : javafx.scene.Cursor.HAND);
+        }
+
+        private void onPointer(MouseEvent event) {
+            if (disabled) {
                 return;
             }
-            var url = OptionsOverlay.class.getResource("/deltablade/options.css");
-            if (url != null && !scene.getStylesheets().contains(url.toExternalForm())) {
-                scene.getStylesheets().add(url.toExternalForm());
-                stylesheetAdded = true;
+            applyFromEvent(event, true);
+        }
+
+        private void applyFromEvent(MouseEvent event, boolean live) {
+            double inner = width - 16;
+            double x = Math.max(0, Math.min(inner, event.getX() - 8));
+            value = inner <= 0 ? 0 : x / inner;
+            layoutValue();
+            if (live) {
+                onLive.accept(value);
             }
-        });
+        }
+
+        private void layoutValue() {
+            double inner = width - 16;
+            fill.setWidth(Math.max(TRACK_HEIGHT, inner * value));
+            thumb.setTranslateX(8 + inner * value);
+        }
+
+        private static double clamp01(double volume) {
+            return Math.max(0.0, Math.min(1.0, volume));
+        }
     }
 }

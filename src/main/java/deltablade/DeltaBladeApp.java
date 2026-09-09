@@ -78,6 +78,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     private boolean optionsOpen = false;
     private boolean enginePausedByOptions = false;
     private Node optionsRoot;
+    private HighScoreOverlay highScoreOverlay;
+    private Node highScoreRoot;
     private static boolean escFilterInstalled = false;
     
     private Timeline activeShake = null;
@@ -283,7 +285,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         getInput().addAction(new UserAction("Restart") {
             @Override
             protected void onActionBegin() {
-                if (gameOver && !optionsOpen) {
+                if (gameOver && !optionsOpen && !enteringHighScoreName()) {
                     restartGame();
                 }
             }
@@ -317,6 +319,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         optionsOpen = false;
         enginePausedByOptions = false;
         optionsRoot = null;
+        highScoreOverlay = null;
+        highScoreRoot = null;
         player = null;
         waveManager = null;
         minigameActive = false;
@@ -401,54 +405,57 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         glow.setInput(titleGlow);
         title.setEffect(glow);
         
-        title.setTranslateX(getAppWidth() / 2 - 200);
-        title.setTranslateY(180);
+        centerHorizontally(title, 150);
         
         Text subtitle = new Text("- ARCADE SHOOTER -");
         subtitle.setFont(Font.font("Monospace", 16));
         subtitle.setFill(Color.LIGHTGRAY);
-        subtitle.setTranslateX(getAppWidth() / 2 - 90);
-        subtitle.setTranslateY(220);
+        centerHorizontally(subtitle, 188);
+
+        Text hiLine = new Text(titleHiText());
+        hiLine.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
+        hiLine.setFill(Color.GOLD);
+        centerHorizontally(hiLine, 216);
         
         Button startButton = createMenuButton("START GAME");
         startButton.setOnAction(e -> startActualGame());
         
         Button optionsButton = createMenuButton("OPTIONEN");
         optionsButton.setOnAction(e -> showOptions());
+
+        Button hiscoreButton = createMenuButton("HISCORE");
+        hiscoreButton.setOnAction(e -> showHighScoreTable(null, true));
         
-        VBox menuBox = new VBox(16, startButton, optionsButton);
+        VBox menuBox = new VBox(12, startButton, optionsButton, hiscoreButton);
         menuBox.setAlignment(Pos.CENTER);
         menuBox.setPrefWidth(260);
         menuBox.setTranslateX(getAppWidth() / 2.0 - 130);
-        menuBox.setTranslateY(300);
+        menuBox.setTranslateY(240);
         
         Text controls = new Text("Pfeiltasten/A,D = Bewegen | SPACE/X = Feuer (tippen)");
         controls.setFont(Font.font("Monospace", 12));
         controls.setFill(Color.GRAY);
-        controls.setTranslateX(getAppWidth() / 2 - 190);
-        controls.setTranslateY(470);
+        centerHorizontally(controls, 455);
         
         Text extraInfo = new Text("B = Schüsse gleichzeitig | W = Waffe | EXTRA = Leben");
         extraInfo.setFont(Font.font("Monospace", 12));
         extraInfo.setFill(Color.GOLD);
-        extraInfo.setTranslateX(getAppWidth() / 2 - 195);
-        extraInfo.setTranslateY(500);
+        centerHorizontally(extraInfo, 478);
         
         Text optionsHint = new Text("ESC = Optionen");
         optionsHint.setFont(Font.font("Monospace", 11));
         optionsHint.setFill(Color.rgb(120, 160, 190));
-        optionsHint.setTranslateX(getAppWidth() / 2.0 - 55);
-        optionsHint.setTranslateY(530);
+        centerHorizontally(optionsHint, 500);
 
         Text testHint = new Text("TEST  111 = Meteor  |  222 = Cognitive");
         testHint.setFont(Font.font("Monospace", 11));
         testHint.setFill(Color.rgb(90, 110, 130));
-        testHint.setTranslateX(getAppWidth() / 2.0 - 145);
-        testHint.setTranslateY(552);
+        centerHorizontally(testHint, 522);
         
         titleScreenNodes.add(overlay);
         titleScreenNodes.add(title);
         titleScreenNodes.add(subtitle);
+        titleScreenNodes.add(hiLine);
         titleScreenNodes.add(menuBox);
         titleScreenNodes.add(controls);
         titleScreenNodes.add(extraInfo);
@@ -467,6 +474,12 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         }
     }
     
+    private void centerHorizontally(Node node, double y) {
+        var bounds = node.getLayoutBounds();
+        node.setTranslateX((getAppWidth() - bounds.getWidth()) / 2.0 - bounds.getMinX());
+        node.setTranslateY(y);
+    }
+
     private Button createMenuButton(String label) {
         Button button = new Button(label);
         button.setFont(Font.font("Monospace", FontWeight.BOLD, 20));
@@ -474,7 +487,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         String base =
             "-fx-background-color: linear-gradient(to bottom, #2a5298, #1e3c72);" +
             "-fx-text-fill: white;" +
-            "-fx-padding: 15 40;" +
+            "-fx-padding: 10 40;" +
             "-fx-background-radius: 8;" +
             "-fx-border-color: #4a90d9;" +
             "-fx-border-width: 2;" +
@@ -483,7 +496,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         String hover =
             "-fx-background-color: linear-gradient(to bottom, #3a6ab8, #2e4c82);" +
             "-fx-text-fill: white;" +
-            "-fx-padding: 15 40;" +
+            "-fx-padding: 10 40;" +
             "-fx-background-radius: 8;" +
             "-fx-border-color: #6ab0f9;" +
             "-fx-border-width: 2;" +
@@ -519,6 +532,14 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
                 return;
             }
             scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (highScoreOverlay != null && highScoreOverlay.handleKey(e)) {
+                    e.consume();
+                    return;
+                }
+                if (enteringHighScoreName()) {
+                    e.consume();
+                    return;
+                }
                 if (e.getCode() == KeyCode.ESCAPE) {
                     toggleOptions();
                     e.consume();
@@ -548,7 +569,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
     
     private void showOptions() {
-        if (optionsOpen) {
+        if (optionsOpen || enteringHighScoreName()) {
             return;
         }
         OptionsOverlay overlay = new OptionsOverlay(this::hideOptions);
@@ -644,6 +665,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     
     private void startActualGame() {
         hideOptions();
+        hideHighScoreOverlay();
         hideTitleScreen();
         showingTitleScreen = false;
         gameStarted = true;
@@ -1338,39 +1360,57 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     
     private void triggerGameOver() {
         gameOver = true;
-        
-        Rectangle overlay = new Rectangle(getAppWidth(), getAppHeight());
-        overlay.setFill(Color.rgb(0, 0, 0, 0.7));
-        
-        Text gameOverText = new Text("GAME OVER");
-        gameOverText.setFont(Font.font("Monospace", 48));
-        gameOverText.setFill(Color.RED);
-        gameOverText.setTranslateX(getAppWidth() / 2 - 140);
-        gameOverText.setTranslateY(getAppHeight() / 2 - 50);
-        
-        Text scoreText = new Text("Final Score: " + geti(GameVars.SCORE));
-        scoreText.setFont(Font.font("Monospace", 24));
-        scoreText.setFill(Color.WHITE);
-        scoreText.setTranslateX(getAppWidth() / 2 - 100);
-        scoreText.setTranslateY(getAppHeight() / 2);
-        
-        Text levelText = new Text("Level Reached: " + geti(GameVars.LEVEL));
-        levelText.setFont(Font.font("Monospace", 24));
-        levelText.setFill(Color.WHITE);
-        levelText.setTranslateX(getAppWidth() / 2 - 100);
-        levelText.setTranslateY(getAppHeight() / 2 + 35);
-        
-        Text restartText = new Text("Press R to Restart / Drücke R zum Neustarten");
-        restartText.setFont(Font.font("Monospace", 18));
-        restartText.setFill(Color.YELLOW);
-        restartText.setTranslateX(getAppWidth() / 2 - 200);
-        restartText.setTranslateY(getAppHeight() / 2 + 100);
-        
-        getGameScene().addUINode(overlay);
-        getGameScene().addUINode(gameOverText);
-        getGameScene().addUINode(scoreText);
-        getGameScene().addUINode(levelText);
-        getGameScene().addUINode(restartText);
+        int score = geti(GameVars.SCORE);
+        int wave = geti(GameVars.LEVEL);
+        if (HighScoreStore.qualifies(score)) {
+            showHighScoreNameEntry(score, wave);
+        } else {
+            showHighScoreTable(null, false);
+        }
+    }
+
+    private String titleHiText() {
+        var table = HighScoreStore.entries();
+        if (table.isEmpty()) {
+            return "HI  ---  000000";
+        }
+        var top = table.getFirst();
+        return "HI  " + top.name() + "  " + HighScoreStore.formatScore(top.score());
+    }
+
+    private boolean enteringHighScoreName() {
+        return highScoreOverlay != null && highScoreOverlay.isNameEntry();
+    }
+
+    private void showHighScoreNameEntry(int score, int wave) {
+        hideHighScoreOverlay();
+        highScoreOverlay = HighScoreOverlay.nameEntry(score, wave, this::showHighScoreTableAfterSave);
+        highScoreRoot = highScoreOverlay.getRoot();
+        getGameScene().addUINode(highScoreRoot);
+    }
+
+    private void showHighScoreTableAfterSave(int rank) {
+        showHighScoreTable(rank >= 0 ? rank : null, false);
+    }
+
+    private void showHighScoreTable(Integer highlightRank, boolean fromTitle) {
+        hideHighScoreOverlay();
+        String closeLabel = fromTitle ? "ZURÜCK" : "R = NEUSTART";
+        Runnable onClose = fromTitle ? this::hideHighScoreOverlay : null;
+        highScoreOverlay = HighScoreOverlay.table(highlightRank, closeLabel, onClose);
+        highScoreRoot = highScoreOverlay.getRoot();
+        getGameScene().addUINode(highScoreRoot);
+    }
+
+    private void hideHighScoreOverlay() {
+        if (highScoreOverlay != null) {
+            highScoreOverlay.dispose();
+            highScoreOverlay = null;
+        }
+        if (highScoreRoot != null) {
+            getGameScene().removeUINode(highScoreRoot);
+            highScoreRoot = null;
+        }
     }
     
     private void restartGame() {

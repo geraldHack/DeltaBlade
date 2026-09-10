@@ -29,6 +29,21 @@ Or alternatively:
 mvn compile exec:java
 ```
 
+### Package (Mac, Windows, Linux)
+Version comes from `pom.xml` (`1.0.0`). Packages are named `DeltaBlade-1.0.0-<os>-<arch>`.
+
+Local build for the current OS (needs JDK 21 with `jpackage`):
+```bash
+mvn -Pdist verify
+```
+Output: `target/dist/`
+
+- macOS: `.dmg` (unsigned: after download use `Installieren.command` in the DMG, or `xattr -cr` on the DMG/app if Gatekeeper says “damaged”)
+- Windows: `.exe` (needs [WiX 3](https://wixtoolset.org/))
+- Linux: `.deb` (needs `fakeroot`)
+
+All three platforms are built by GitHub Actions (workflow **Package**, or a `v1.0.0` tag).
+
 ### How to Play
 - **Move**: Arrow keys (← →) or A/D
 - **Fire**: Space or X
@@ -82,6 +97,21 @@ Oder alternativ:
 ```bash
 mvn compile exec:java
 ```
+
+### Paketieren (Mac, Windows, Linux)
+Die Versionsnummer steht in der `pom.xml` (`1.0.0`). Dateiname: `DeltaBlade-1.0.0-<os>-<arch>`.
+
+Lokal für das aktuelle System (JDK 21 mit `jpackage`):
+```bash
+mvn -Pdist verify
+```
+Ausgabe: `target/dist/`
+
+- macOS: `.dmg` (unsigniert: nach dem Download `Installieren.command` im DMG nutzen, oder bei „beschädigt“ `xattr -cr` auf DMG/App)
+- Windows: `.exe` (braucht [WiX 3](https://wixtoolset.org/))
+- Linux: `.deb` (braucht `fakeroot`)
+
+Alle drei Plattformen baut GitHub Actions (Workflow **Package** oder Tag `v1.0.0`).
 
 ### Steuerung
 - **Bewegen**: Pfeiltasten (← →) oder A/D

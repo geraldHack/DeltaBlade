@@ -5,7 +5,7 @@ import javafx.scene.input.KeyCode;
 import java.util.Optional;
 
 /**
- * Debug codes: tap the same number key three times (111 = minigame 1, 222 = 2).
+ * Debug codes: tap the same number key three times (111 = minigame 1, 222 = 2, 444 = warp).
  */
 public final class TestMode {
 
@@ -51,6 +51,7 @@ public final class TestMode {
         return switch (index) {
             case 1 -> new Drop("meteorPickup", "TEST DROP  METEOR");
             case 2 -> new Drop("cognitivePickup", "TEST DROP  COGNITIVE");
+            case 4 -> new Drop("WARP", "TEST  WARP");
             default -> null;
         };
     }

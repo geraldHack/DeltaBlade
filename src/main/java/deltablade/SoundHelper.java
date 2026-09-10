@@ -45,6 +45,20 @@ public final class SoundHelper {
             }
         }
     }
+
+    public static void stop(String name) {
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        try {
+            Sound sound = getAssetLoader().loadSound(name);
+            if (sound != null) {
+                getAudioPlayer().stopSound(sound);
+            }
+        } catch (Exception ignored) {
+            // Audio stack may not be ready during shutdown.
+        }
+    }
     
     /**
      * Check if a sound file exists and can be loaded.

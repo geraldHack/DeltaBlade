@@ -4,11 +4,13 @@ import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.input.UserAction;
+import deltablade.components.BackgroundScrollComponent;
 import deltablade.components.BulletComponent;
 import deltablade.components.EnemyComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.PickupComponent;
 import deltablade.components.PlayerComponent;
+import deltablade.components.StarComponent;
 import deltablade.minigames.CognitiveTestGame;
 import deltablade.minigames.MeteorStormGame;
 import deltablade.minigames.Minigame;
@@ -67,6 +69,9 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     private boolean waveTransition = false;
     private boolean minigameActive = false;
     private Minigame activeMinigame;
+    private boolean warping = false;
+    private double warpElapsed = 0;
+    private Rectangle warpFlash;
     
     private static final Random random = new Random();
     private int frameCount = 0;
@@ -90,7 +95,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         settings.setWidth(800);
         settings.setHeight(600);
         settings.setTitle("DeltaBlade");
-        settings.setVersion("1.0");
+        settings.setVersion(AppVersion.current());
         settings.setMainMenuEnabled(false);
         settings.setGameMenuEnabled(false);
         
@@ -98,6 +103,9 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         settings.setPreserveResizeRatio(true);
         settings.setScaleAffectedOnResize(true);
         settings.setFullScreenAllowed(true);
+        // LaunchServices (Doppelklick) startet mit cwd "/" oder dem read-only DMG.
+        // FXGL legt sonst "logs/" an und beendet sich still mit Read-only file system.
+        settings.setFileSystemWriteAllowed(false);
     }
     
     @Override
@@ -325,6 +333,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         waveManager = null;
         minigameActive = false;
         activeMinigame = null;
+        stopWarpVisuals();
         holdingFire = false;
         movingUp = false;
         movingDown = false;
@@ -412,10 +421,15 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         subtitle.setFill(Color.LIGHTGRAY);
         centerHorizontally(subtitle, 188);
 
+        Text versionLine = new Text(AppVersion.label());
+        versionLine.setFont(Font.font("Monospace", 12));
+        versionLine.setFill(Color.rgb(120, 160, 190));
+        centerHorizontally(versionLine, 208);
+
         Text hiLine = new Text(titleHiText());
         hiLine.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
         hiLine.setFill(Color.GOLD);
-        centerHorizontally(hiLine, 216);
+        centerHorizontally(hiLine, 226);
         
         Button startButton = createMenuButton("START GAME");
         startButton.setOnAction(e -> startActualGame());
@@ -447,7 +461,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         optionsHint.setFill(Color.rgb(120, 160, 190));
         centerHorizontally(optionsHint, 500);
 
-        Text testHint = new Text("TEST  111 = Meteor  |  222 = Cognitive");
+        Text testHint = new Text("TEST  111 = Meteor  |  222 = Cognitive  |  444 = Warp");
         testHint.setFont(Font.font("Monospace", 11));
         testHint.setFill(Color.rgb(90, 110, 130));
         centerHorizontally(testHint, 522);
@@ -455,6 +469,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         titleScreenNodes.add(overlay);
         titleScreenNodes.add(title);
         titleScreenNodes.add(subtitle);
+        titleScreenNodes.add(versionLine);
         titleScreenNodes.add(hiLine);
         titleScreenNodes.add(menuBox);
         titleScreenNodes.add(controls);
@@ -793,7 +808,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             }
             return;
         }
-        if (player == null || gameOver || showingTitleScreen || optionsOpen) return;
+        if (player == null || gameOver || showingTitleScreen || optionsOpen || warping) return;
         
         PlayerComponent pc = player.getComponent(PlayerComponent.class);
         int grade = geti(GameVars.WEAPON_GRADE);
@@ -1113,7 +1128,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
     
     private void playerHit(PlayerComponent pc) {
-        if (minigameActive) {
+        if (minigameActive || warping) {
             return;
         }
         inc(GameVars.LIVES, -1);
@@ -1343,17 +1358,18 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
     
     private void checkWaveComplete() {
-        if (minigameActive) {
+        if (minigameActive || warping) {
             return;
         }
         if (waveManager.isWaveComplete() && !waveTransition) {
             waveTransition = true;
-            
+            if (waveManager.getCurrentWaveType() == WaveManager.WaveType.KAMIKAZE) {
+                startWarp();
+                return;
+            }
             showBanner("WAVE CLEAR!", Color.LIME, 2.0);
-            
             runOnce(() -> {
-                inc(GameVars.LEVEL, 1);
-                startWave();
+                continueToNextWave();
             }, Duration.seconds(2));
         }
     }
@@ -1442,7 +1458,22 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             showBanner(drop.banner(), Color.LIGHTGRAY, 1.2);
             return;
         }
-        if (gameOver || optionsOpen || minigameActive) {
+        if ("WARP".equals(drop.spawnName())) {
+            if (gameOver || optionsOpen || minigameActive || warping) {
+                return;
+            }
+            if (!gameStarted || showingTitleScreen || player == null) {
+                if (showingTitleScreen) {
+                    startActualGame();
+                }
+                if (player == null) {
+                    return;
+                }
+            }
+            startWarp();
+            return;
+        }
+        if (gameOver || optionsOpen || minigameActive || warping) {
             return;
         }
         if (!gameStarted || showingTitleScreen || player == null) {
@@ -1460,7 +1491,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
 
     private void startMinigame(Minigame game) {
-        if (game == null || gameOver || showingTitleScreen) {
+        if (game == null || gameOver || showingTitleScreen || warping) {
             return;
         }
         waveTransition = true;
@@ -1510,11 +1541,93 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         }
 
         runOnce(() -> {
-            if (!gameOver && !showingTitleScreen) {
-                inc(GameVars.LEVEL, 1);
-                startWave();
-            }
+            continueToNextWave();
         }, Duration.seconds(2));
+    }
+
+    private static final double WARP_DURATION = 8.9;
+
+    private void startWarp() {
+        if (warping || gameOver || showingTitleScreen) {
+            return;
+        }
+        warping = true;
+        waveTransition = true;
+        warpElapsed = 0;
+        clearWaveEntities();
+        showBanner("WARP", Color.CYAN, 2.2);
+        MusicHelper.stop();
+        SoundHelper.play("warp.mp3");
+        ensureWarpFlash();
+        applyWarpVisuals(0);
+    }
+
+    private void updateWarp(double tpf) {
+        warpElapsed += tpf;
+        applyWarpVisuals(warpIntensity(warpElapsed / WARP_DURATION));
+        if (warpElapsed >= WARP_DURATION) {
+            finishWarp();
+        }
+    }
+
+    private static double warpIntensity(double t) {
+        double x = Math.max(0, Math.min(1, t));
+        if (x < 0.14) {
+            return easeIn(x / 0.14);
+        }
+        if (x > 0.82) {
+            return 1.0 - easeIn((x - 0.82) / 0.18);
+        }
+        return 1.0;
+    }
+
+    private static double easeIn(double t) {
+        return t * t;
+    }
+
+    private void finishWarp() {
+        stopWarpVisuals();
+        MusicHelper.applyFromStore();
+        // Shop comes later; warp is the hook, then the next wave cycle.
+        continueToNextWave();
+    }
+
+    private void continueToNextWave() {
+        if (gameOver || showingTitleScreen) {
+            return;
+        }
+        inc(GameVars.LEVEL, 1);
+        startWave();
+    }
+
+    private void ensureWarpFlash() {
+        if (warpFlash != null) {
+            return;
+        }
+        warpFlash = new Rectangle(getAppWidth(), getAppHeight());
+        warpFlash.setFill(Color.rgb(140, 210, 255, 0.0));
+        warpFlash.setMouseTransparent(true);
+        getGameScene().addUINode(warpFlash);
+    }
+
+    private void applyWarpVisuals(double intensity) {
+        StarComponent.setWarp(intensity);
+        BackgroundScrollComponent.setWarp(intensity);
+        if (warpFlash != null) {
+            warpFlash.setFill(Color.rgb(150, 220, 255, 0.04 + intensity * 0.16));
+        }
+    }
+
+    private void stopWarpVisuals() {
+        warping = false;
+        warpElapsed = 0;
+        StarComponent.setWarp(0);
+        BackgroundScrollComponent.setWarp(0);
+        SoundHelper.stop("warp.mp3");
+        if (warpFlash != null) {
+            getGameScene().removeUINode(warpFlash);
+            warpFlash = null;
+        }
     }
 
     @Override
@@ -1629,6 +1742,19 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
                 pc.updateIdle();
             }
             activeMinigame.update(tpf);
+            return;
+        }
+
+        if (warping) {
+            PlayerComponent warpPilot = player.getComponent(PlayerComponent.class);
+            if (movingLeft) {
+                warpPilot.moveLeft(tpf);
+            }
+            if (movingRight) {
+                warpPilot.moveRight(tpf);
+            }
+            warpPilot.updateIdle();
+            updateWarp(tpf);
             return;
         }
         

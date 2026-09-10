@@ -1,0 +1,20 @@
+DeltaBlade für macOS (Apple Silicon)
+
+macOS blockiert Downloads ohne Apple-Entwicklerzertifikat.
+Deshalb erscheint oft „DeltaBlade ist beschädigt“ oder
+„kann nicht geöffnet werden, weil der Entwickler nicht verifiziert ist“.
+
+So startest du das Spiel:
+
+1. Doppelklick auf „Installieren.command“
+   (wenn macOS warnt: Rechtsklick → Öffnen)
+2. Das Skript kopiert DeltaBlade nach Programme und startet es.
+
+Oder von Hand:
+
+  xattr -cr /Applications/DeltaBlade.app
+  open /Applications/DeltaBlade.app
+
+Falls schon die DMG als „beschädigt“ gilt:
+
+  xattr -cr ~/Downloads/DeltaBlade-1.0.0-mac-aarch64.dmg

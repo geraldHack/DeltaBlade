@@ -6,7 +6,7 @@
 
     <groupId>deltablade</groupId>
     <artifactId>deltablade</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>DeltaBlade</name>
@@ -18,6 +18,10 @@
         <maven.compiler.target>21</maven.compiler.target>
         <fxgl.version>21.1</fxgl.version>
         <javafx.version>21.0.2</javafx.version>
+        <app.version>${project.version}</app.version>
+        <jpackage.type>APP_IMAGE</jpackage.type>
+        <jpackage.icon>${project.basedir}/packaging/icons/deltablade.png</jpackage.icon>
+        <inject.dmg.skip>true</inject.dmg.skip>
     </properties>
 
     <dependencies>
@@ -50,6 +54,16 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/resources-filtered</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -104,10 +118,185 @@
                     <mainClass>deltablade.DeltaBladeApp</mainClass>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>deltablade.DeltaBladeApp</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
     <profiles>
+        <profile>
+            <id>dist-mac</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>DMG</jpackage.type>
+                <jpackage.icon>${project.basedir}/packaging/icons/deltablade.icns</jpackage.icon>
+                <inject.dmg.skip>false</inject.dmg.skip>
+            </properties>
+        </profile>
+        <profile>
+            <id>dist-win</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>EXE</jpackage.type>
+                <jpackage.icon>${project.basedir}/packaging/icons/deltablade.ico</jpackage.icon>
+            </properties>
+        </profile>
+        <profile>
+            <id>dist-linux</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <name>linux</name>
+                </os>
+            </activation>
+            <properties>
+                <jpackage.type>DEB</jpackage.type>
+                <jpackage.icon>${project.basedir}/packaging/icons/deltablade.png</jpackage.icon>
+            </properties>
+        </profile>
+        <profile>
+            <id>dist</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.6.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-runtime-deps</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/jpackage-input</outputDirectory>
+                                    <includeScope>runtime</includeScope>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>copy-app-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${project.build.directory}/jpackage-input"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <version>1.6.6</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>jpackage</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <name>DeltaBlade</name>
+                            <appVersion>${app.version}</appVersion>
+                            <vendor>DeltaBlade</vendor>
+                            <copyright>DeltaBlade</copyright>
+                            <description>Arcade shooter</description>
+                            <destination>${project.build.directory}/dist</destination>
+                            <input>${project.build.directory}/jpackage-input</input>
+                            <mainJar>${project.build.finalName}.jar</mainJar>
+                            <mainClass>deltablade.DeltaBladeApp</mainClass>
+                            <type>${jpackage.type}</type>
+                            <icon>${jpackage.icon}</icon>
+                            <removeDestination>true</removeDestination>
+                            <javaOptions>
+                                <option>-Dprism.order=sw,es2</option>
+                                <option>-Dprism.metal=false</option>
+                                <option>--enable-native-access=ALL-UNNAMED</option>
+                                <option>-Xms128m</option>
+                                <option>-Xmx512m</option>
+                            </javaOptions>
+                            <macPackageIdentifier>deltablade.DeltaBlade</macPackageIdentifier>
+                            <macPackageName>DeltaBlade</macPackageName>
+                            <macAppCategory>games</macAppCategory>
+                            <winMenu>true</winMenu>
+                            <winShortcut>true</winShortcut>
+                            <linuxShortcut>true</linuxShortcut>
+                            <linuxAppCategory>games</linuxAppCategory>
+                            <linuxPackageName>deltablade</linuxPackageName>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>name-dist</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>java</goal>
+                                </goals>
+                                <configuration>
+                                    <mainClass>deltablade.tools.NameDist</mainClass>
+                                    <arguments>
+                                        <argument>${app.version}</argument>
+                                        <argument>${project.build.directory}/dist</argument>
+                                    </arguments>
+                                    <classpathScope>compile</classpathScope>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>inject-mac-dmg-content</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <skip>${inject.dmg.skip}</skip>
+                                    <executable>/bin/bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/packaging/mac/inject-dmg-content.sh</argument>
+                                        <argument>${project.build.directory}/dist</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>explosions</id>
             <build>

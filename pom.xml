@@ -6,7 +6,7 @@
 
     <groupId>deltablade</groupId>
     <artifactId>deltablade</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <packaging>jar</packaging>
 
     <name>DeltaBlade</name>
@@ -22,6 +22,8 @@
         <jpackage.type>APP_IMAGE</jpackage.type>
         <jpackage.icon>${project.basedir}/packaging/icons/deltablade.png</jpackage.icon>
         <inject.dmg.skip>true</inject.dmg.skip>
+        <!-- Stabil halten: sonst erzeugt jpackage jede EXE als neues Windows-Produkt. -->
+        <jpackage.win.upgrade.uuid>6D2C415E-841E-3F95-A418-FEEE40105FDA</jpackage.win.upgrade.uuid>
     </properties>
 
     <dependencies>
@@ -251,7 +253,10 @@
                             <macPackageName>DeltaBlade</macPackageName>
                             <macAppCategory>games</macAppCategory>
                             <winMenu>true</winMenu>
+                            <winMenuGroup>DeltaBlade</winMenuGroup>
                             <winShortcut>true</winShortcut>
+                            <winDirChooser>true</winDirChooser>
+                            <winUpgradeUuid>${jpackage.win.upgrade.uuid}</winUpgradeUuid>
                             <linuxShortcut>true</linuxShortcut>
                             <linuxAppCategory>games</linuxAppCategory>
                             <linuxPackageName>deltablade</linuxPackageName>

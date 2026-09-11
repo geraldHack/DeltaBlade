@@ -48,9 +48,7 @@ final class MusicLocations {
             if (!Files.exists(readme)) {
                 Files.writeString(readme, README, StandardCharsets.UTF_8);
             }
-            if (!hasAudio(dir)) {
-                seedFromBundled(dir);
-            }
+            seedFromBundled(dir);
         } catch (IOException e) {
             System.err.println("[Music] Could not prepare " + dir + ": " + e.getMessage());
         }
@@ -100,6 +98,28 @@ final class MusicLocations {
         return lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a");
     }
 
+    private static boolean hasSimilarAudio(Path dir, String bundledName) {
+        String want = catalogKey(bundledName);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            for (Path path : stream) {
+                if (Files.isRegularFile(path) && catalogKey(path.getFileName().toString()).equals(want)) {
+                    return true;
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return false;
+    }
+
+    private static String catalogKey(String fileName) {
+        String stem = fileName;
+        int dot = stem.lastIndexOf('.');
+        if (dot > 0) {
+            stem = stem.substring(0, dot);
+        }
+        return stem.replace('_', ' ').replace('-', ' ').replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
+    }
+
     static boolean hasAudio(Path dir) {
         if (dir == null || !Files.isDirectory(dir)) {
             return false;
@@ -129,7 +149,7 @@ final class MusicLocations {
         }
         for (String name : names) {
             Path dest = dir.resolve(name);
-            if (Files.exists(dest)) {
+            if (Files.exists(dest) || hasSimilarAudio(dir, name)) {
                 continue;
             }
             try (InputStream in = MusicLocations.class.getResourceAsStream("/assets/music/" + name)) {

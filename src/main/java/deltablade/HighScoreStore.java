@@ -7,12 +7,12 @@ import java.util.Locale;
 import java.util.prefs.Preferences;
 
 /**
- * Top-10 hiscores plus last used initials. Survives restarts via Preferences.
+ * Top-10 hiscores plus last used name (1–10 letters). Survives restarts via Preferences.
  */
 public final class HighScoreStore {
 
     public static final int MAX_ENTRIES = 10;
-    public static final int NAME_LENGTH = 3;
+    public static final int NAME_LENGTH = 10;
     public static final String DEFAULT_NAME = "AAA";
 
     public record Entry(String name, int score, int wave) {}
@@ -28,16 +28,19 @@ public final class HighScoreStore {
     }
 
     public static String lastName() {
-        return sanitizeName(PREFS.get(KEY_LAST_NAME, DEFAULT_NAME));
+        return sanitizeNameOrDefault(PREFS.get(KEY_LAST_NAME, DEFAULT_NAME));
     }
 
     public static void setLastName(String name) {
-        PREFS.put(KEY_LAST_NAME, sanitizeName(name));
+        PREFS.put(KEY_LAST_NAME, sanitizeNameOrDefault(name));
     }
 
     public static boolean qualifies(int score) {
-        List<Entry> table = entries();
-        if (table.size() < MAX_ENTRIES) {
+        return qualifies(score, entries());
+    }
+
+    public static boolean qualifies(int score, List<Entry> table) {
+        if (table == null || table.size() < MAX_ENTRIES) {
             return true;
         }
         return score > table.getLast().score();
@@ -48,7 +51,7 @@ public final class HighScoreStore {
      * @return 0-based rank of the new entry, or -1 if it did not qualify
      */
     public static int insert(String name, int score, int wave) {
-        String clean = sanitizeName(name);
+        String clean = sanitizeNameOrDefault(name);
         List<Entry> table = new ArrayList<>(entries());
         table.add(new Entry(clean, Math.max(0, score), Math.max(1, wave)));
         table.sort(Comparator
@@ -75,7 +78,7 @@ public final class HighScoreStore {
         if (raw != null) {
             for (int i = 0; i < raw.length(); i++) {
                 char c = Character.toUpperCase(raw.charAt(i));
-                if (c >= 'A' && c <= 'Z') {
+                if ((c >= 'A' && c <= 'Z') || c == ' ') {
                     letters.append(c);
                 }
                 if (letters.length() == NAME_LENGTH) {
@@ -83,10 +86,12 @@ public final class HighScoreStore {
                 }
             }
         }
-        while (letters.length() < NAME_LENGTH) {
-            letters.append('A');
-        }
         return letters.toString();
+    }
+
+    public static String sanitizeNameOrDefault(String raw) {
+        String clean = sanitizeName(raw);
+        return clean.isEmpty() ? DEFAULT_NAME : clean;
     }
 
     private static List<Entry> parse(String packed) {
@@ -101,7 +106,7 @@ public final class HighScoreStore {
             }
             try {
                 table.add(new Entry(
-                        sanitizeName(parts[0]),
+                        sanitizeNameOrDefault(parts[0]),
                         Integer.parseInt(parts[1]),
                         Math.max(1, Integer.parseInt(parts[2]))));
             } catch (NumberFormatException ignored) {

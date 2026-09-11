@@ -19,6 +19,8 @@ public final class GameVars {
     public static final String SQUAD_COMBOS = "squadCombos";
     public static final String COGNITIVE_WINS = "cognitiveWins";
     public static final String METEOR_WINS = "meteorWins";
+    public static final String RANK = "rank";
+    public static final String RANK_MASK = "rankMask";
     
     public static final int INITIAL_LIVES = 3;
     public static final int INITIAL_AMMO_CAP = 5;
@@ -26,6 +28,10 @@ public final class GameVars {
     public static final int MAX_WEAPON_GRADE = 4;
     
     public static final int RAIL_WIDTH = 64;
+    /** Lowest Y for sideways patrol. Below that only dives/kamikaze. */
+    public static final double FORMATION_MAX_Y_RATIO = 0.38;
+    /** FAST/TOUGH fire straight until this wave so the first pack stays readable. */
+    public static final int ANGLED_FIRE_MIN_LEVEL = 5;
     
     public static final char[] EXTRA_LETTERS = {'E', 'X', 'T', 'R', 'A'};
     public static final String[] EXTRA_VARS = {EXTRA_E, EXTRA_X, EXTRA_T, EXTRA_R, EXTRA_A};
@@ -34,6 +40,14 @@ public final class GameVars {
     public static final double PICKUP_DROP_CHANCE = 0.03;
     public static final double AUTOFIRE_DROP_CHANCE = 0.01;
     public static final double MINIGAME_DROP_CHANCE = 0.01;
+    public static final double TIME_PICKUP_DROP_CHANCE = 0.025;
+    public static final double EXTRA_TIME_MAX = 30.0;
+    public static final double EXTRA_TIME_REFILL = 12.0;
+    public static final double RANK_MARKER_DROP_CHANCE = 0.2;
+    public static final int RANK_COLOR_COUNT = 6;
+    public static final int RANK_UP_SCORE = 5000;
+    public static final int BONUS_PERFECT_BASE = 2000;
+    public static final int BONUS_ROUND_PERFECT_SCORE = 20000;
     
     public static final double COIN_WHITE_DROP_CHANCE = 0.08;
     public static final double COIN_GREEN_DROP_CHANCE = 0.025;

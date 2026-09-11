@@ -87,7 +87,7 @@ public final class OptionsOverlay {
         dimmer.setFill(Color.rgb(0, 0, 0, 0.72));
 
         double panelW = 460;
-        double panelH = 360;
+        double panelH = 420;
         double panelX = (width - panelW) / 2.0;
         double panelY = (height - panelH) / 2.0;
 
@@ -150,19 +150,35 @@ public final class OptionsOverlay {
         VBox trackBlock = new VBox(6, sectionLabel("Titel"), trackRow);
         trackBlock.setAlignment(Pos.CENTER);
 
+        Text folderHint = new Text("Ordner: " + MusicLocations.displayPath());
+        folderHint.setFont(Font.font("Monospace", 12));
+        folderHint.setFill(Color.rgb(140, 180, 210));
+
+        Button openFolder = styledButton("ORDNER ÖFFNEN");
+        openFolder.setPrefWidth(220);
+        openFolder.setOnAction(e -> {
+            MusicLocations.revealUserLibrary();
+            MusicHelper.rescan();
+            refreshControls();
+        });
+
+        VBox folderBlock = new VBox(8, folderHint, openFolder);
+        folderBlock.setAlignment(Pos.CENTER);
+
         Button back = styledButton("ZURÜCK");
         back.setPrefWidth(180);
         back.setOnAction(e -> onClose.run());
 
-        VBox content = new VBox(18);
+        VBox content = new VBox(16);
         content.setAlignment(Pos.CENTER);
-        content.setPadding(new Insets(28, 36, 24, 36));
+        content.setPadding(new Insets(24, 36, 20, 36));
         content.setPrefWidth(panelW);
         content.setTranslateX(panelX);
         content.setTranslateY(panelY);
-        content.getChildren().addAll(title, musicRow, volumeBlock, trackBlock, back);
+        content.getChildren().addAll(title, musicRow, volumeBlock, trackBlock, folderBlock, back);
 
         root.getChildren().addAll(dimmer, panel, accent, content);
+        MusicHelper.rescan();
         refreshControls();
     }
 
@@ -182,6 +198,7 @@ public final class OptionsOverlay {
     }
 
     private void cycleTrack(int delta) {
+        MusicHelper.rescan();
         List<MusicHelper.Track> tracks = MusicHelper.tracks();
         if (tracks.size() <= 1) {
             return;

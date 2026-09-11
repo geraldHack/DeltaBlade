@@ -1,0 +1,11 @@
+DeltaBlade — eigene Musik
+
+Lege MP3-, WAV- oder M4A-Dateien hier ab:
+
+  ~/Music/DeltaBlade
+
+Im Finder: Musik → DeltaBlade
+Im Spiel: OPTIONEN → ORDNER ÖFFNEN
+
+Beim ersten Start kopiert das Spiel die Standard-Tracks dorthin.
+Dateien in diesem Repo-Ordner werden beim Entwickeln ebenfalls erkannt.

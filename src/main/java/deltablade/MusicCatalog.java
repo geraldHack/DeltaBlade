@@ -13,7 +13,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -30,15 +29,54 @@ final class MusicCatalog {
     private MusicCatalog() {}
 
     static List<MusicHelper.Track> scan() {
-        List<String> files = listTopLevelAudio();
-        files.sort(String.CASE_INSENSITIVE_ORDER);
+        MusicLocations.ensureUserLibrary();
 
         List<MusicHelper.Track> tracks = new ArrayList<>();
-        for (String fileName : files) {
-            String id = stripExtension(fileName);
-            tracks.add(new MusicHelper.Track(id, fileName, displayName(id)));
+        collectTracksFromDirectory(MusicLocations.userLibraryDir(), tracks);
+        for (Path extra : MusicLocations.extraScanDirs()) {
+            collectTracksFromDirectory(extra, tracks);
         }
+        if (tracks.isEmpty()) {
+            collectBundledTracks(tracks);
+        }
+        tracks.sort((a, b) -> a.displayName().compareToIgnoreCase(b.displayName()));
         return List.copyOf(tracks);
+    }
+
+    private static void collectTracksFromDirectory(Path dir, List<MusicHelper.Track> tracks) {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            for (Path path : stream) {
+                if (!Files.isRegularFile(path) || !MusicLocations.isCatalogAudio(path.getFileName().toString())) {
+                    continue;
+                }
+                addTrack(tracks, path.getFileName().toString(), path.toUri().toString());
+            }
+        } catch (IOException e) {
+            System.err.println("[MusicCatalog] Could not read " + dir + ": " + e.getMessage());
+        }
+    }
+
+    private static void collectBundledTracks(List<MusicHelper.Track> tracks) {
+        List<String> files = listTopLevelAudio();
+        files.sort(String.CASE_INSENSITIVE_ORDER);
+        for (String fileName : files) {
+            URL resource = MusicCatalog.class.getResource("/assets/music/" + fileName);
+            String sourceUrl = resource != null ? resource.toExternalForm() : null;
+            addTrack(tracks, fileName, sourceUrl);
+        }
+    }
+
+    private static void addTrack(List<MusicHelper.Track> tracks, String fileName, String sourceUrl) {
+        String id = stripExtension(fileName);
+        for (MusicHelper.Track existing : tracks) {
+            if (existing.id().equals(id) || existing.fileName().equalsIgnoreCase(fileName)) {
+                return;
+            }
+        }
+        tracks.add(new MusicHelper.Track(id, fileName, displayName(id), sourceUrl));
     }
 
     static String displayName(String idOrStem) {
@@ -79,7 +117,7 @@ final class MusicCatalog {
         return names;
     }
 
-    private static void collectFromUrl(URL url, List<String> names) {
+    static void collectFromUrl(URL url, List<String> names) {
         String protocol = url.getProtocol();
         if ("file".equals(protocol)) {
             collectFromDirectory(urlToPath(url), names);
@@ -96,7 +134,7 @@ final class MusicCatalog {
         }
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path path : stream) {
-                if (Files.isRegularFile(path) && isCatalogAudio(path.getFileName().toString())) {
+                if (Files.isRegularFile(path) && MusicLocations.isCatalogAudio(path.getFileName().toString())) {
                     addUnique(names, path.getFileName().toString());
                 }
             }
@@ -123,7 +161,7 @@ final class MusicCatalog {
                 if (relative.contains("/")) {
                     continue;
                 }
-                if (isCatalogAudio(relative)) {
+                if (MusicLocations.isCatalogAudio(relative)) {
                     addUnique(names, relative);
                 }
             }
@@ -132,7 +170,7 @@ final class MusicCatalog {
         }
     }
 
-    private static void collectFromDevFallback(List<String> names) {
+    static void collectFromDevFallback(List<String> names) {
         for (Path dir : List.of(
                 Path.of("src/main/resources/assets/music"),
                 Path.of("target/classes/assets/music"))) {
@@ -148,14 +186,6 @@ final class MusicCatalog {
         } catch (URISyntaxException | IllegalArgumentException e) {
             return Path.of(URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8));
         }
-    }
-
-    private static boolean isCatalogAudio(String fileName) {
-        if (fileName.startsWith(".") || fileName.startsWith("_")) {
-            return false;
-        }
-        String lower = fileName.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a");
     }
 
     private static String stripExtension(String fileName) {

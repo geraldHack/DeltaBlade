@@ -1,23 +1,24 @@
 package deltablade;
 
-import com.almasb.fxgl.audio.Music;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 
+import java.net.URL;
 import java.util.List;
 
-import static com.almasb.fxgl.dsl.FXGL.getAssetLoader;
 import static com.almasb.fxgl.dsl.FXGL.getAudioPlayer;
 import static com.almasb.fxgl.dsl.FXGL.getSettings;
 
 /**
  * Background music: loop the selected catalog track, honor on/off and volume.
- * The catalog is scanned from {@code assets/music/}, not hardcoded here.
+ * Player tracks live in {@code ~/Music/DeltaBlade}; bundled files seed that folder.
  */
 public final class MusicHelper {
 
-    public record Track(String id, String fileName, String displayName) {}
+    public record Track(String id, String fileName, String displayName, String sourceUrl) {}
 
     private static List<Track> catalog;
-    private static Music currentMusic;
+    private static MediaPlayer player;
     private static String currentTrackId;
     private static boolean playing;
     private static boolean loggedMissing;
@@ -26,6 +27,10 @@ public final class MusicHelper {
 
     public static List<Track> tracks() {
         return catalog();
+    }
+
+    public static void rescan() {
+        catalog = MusicCatalog.scan();
     }
 
     public static Track find(String id) {
@@ -58,7 +63,14 @@ public final class MusicHelper {
     }
 
     public static void setVolume(double volume) {
-        getSettings().setGlobalMusicVolume(Math.max(0.0, Math.min(1.0, volume)));
+        double clamped = Math.max(0.0, Math.min(1.0, volume));
+        try {
+            getSettings().setGlobalMusicVolume(clamped);
+        } catch (Exception ignored) {
+        }
+        if (player != null) {
+            player.setVolume(clamped);
+        }
     }
 
     public static void playOverride(String fileName) {
@@ -70,22 +82,13 @@ public final class MusicHelper {
         if (fileName == null || fileName.isBlank()) {
             return;
         }
-        stop();
-        try {
-            Music music = getAssetLoader().loadMusic(fileName);
-            if (music == null) {
-                logMissing(fileName);
-                applyFromStore();
-                return;
-            }
-            getAudioPlayer().loopMusic(music);
-            currentMusic = music;
-            currentTrackId = "override:" + fileName;
-            playing = true;
-        } catch (Exception e) {
-            logMissing(fileName + " - " + e.getMessage());
+        URL resource = MusicHelper.class.getResource("/assets/music/" + fileName);
+        if (resource == null) {
+            logMissing(fileName);
             applyFromStore();
+            return;
         }
+        playUrl(resource.toExternalForm(), "override:" + fileName);
     }
 
     public static void play(Track track) {
@@ -96,38 +99,59 @@ public final class MusicHelper {
             setVolume(OptionsStore.getMusicVolume());
             return;
         }
-        stop();
-        try {
-            Music music = getAssetLoader().loadMusic(track.fileName());
-            if (music == null) {
+        String url = track.sourceUrl();
+        if (url == null || url.isBlank()) {
+            URL resource = MusicHelper.class.getResource("/assets/music/" + track.fileName());
+            if (resource == null) {
                 logMissing(track.fileName());
                 return;
             }
-            getAudioPlayer().loopMusic(music);
-            currentMusic = music;
-            currentTrackId = track.id();
-            playing = true;
-        } catch (Exception e) {
-            logMissing(track.fileName() + " - " + e.getMessage());
+            url = resource.toExternalForm();
         }
+        playUrl(url, track.id());
     }
 
     public static void stop() {
         try {
-            if (currentMusic != null) {
-                getAudioPlayer().stopMusic(currentMusic);
+            if (player != null) {
+                player.stop();
+                player.dispose();
             }
+        } catch (Exception ignored) {
+        }
+        player = null;
+        try {
             getAudioPlayer().stopAllMusic();
         } catch (Exception ignored) {
-            // Audio stack may not be ready during shutdown.
         }
-        currentMusic = null;
         currentTrackId = null;
         playing = false;
     }
 
     public static boolean isPlaying() {
         return playing;
+    }
+
+    private static void playUrl(String url, String trackId) {
+        stop();
+        try {
+            Media media = new Media(url);
+            MediaPlayer next = new MediaPlayer(media);
+            next.setCycleCount(MediaPlayer.INDEFINITE);
+            next.setVolume(OptionsStore.getMusicVolume());
+            next.setOnError(() -> {
+                logMissing(url + " - " + String.valueOf(next.getError()));
+                if (trackId != null && trackId.startsWith("override:")) {
+                    applyFromStore();
+                }
+            });
+            next.play();
+            player = next;
+            currentTrackId = trackId;
+            playing = true;
+        } catch (Exception e) {
+            logMissing(url + " - " + e.getMessage());
+        }
     }
 
     private static List<Track> catalog() {

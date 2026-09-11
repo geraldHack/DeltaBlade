@@ -106,9 +106,11 @@ public class MeteorStormGame implements Minigame {
     @Override
     public void cleanup() {
         active = false;
-        for (Entity rock : List.copyOf(getGameWorld().getEntitiesByType(EntityType.MINIGAME_HAZARD))) {
-            if (rock.isActive()) {
-                rock.removeFromWorld();
+        for (EntityType type : List.of(EntityType.MINIGAME_HAZARD, EntityType.COIN)) {
+            for (Entity entity : List.copyOf(getGameWorld().getEntitiesByType(type))) {
+                if (entity.isActive()) {
+                    entity.removeFromWorld();
+                }
             }
         }
         for (NodeHud item : hud) {

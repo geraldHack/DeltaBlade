@@ -12,11 +12,16 @@ import deltablade.components.ExplosionComponent;
 import deltablade.components.ExtraLetterPickupComponent;
 import deltablade.components.MeteorRockComponent;
 import deltablade.components.PickupComponent;
+import deltablade.components.RankMarkerComponent;
+import deltablade.components.UfoAnimComponent;
 import deltablade.components.BackgroundScrollComponent;
 import deltablade.components.PlayerAnimationComponent;
 import deltablade.components.PlayerComponent;
 import deltablade.components.RailPulseComponent;
 import deltablade.components.StarComponent;
+import com.almasb.fxgl.physics.BoundingShape;
+import com.almasb.fxgl.physics.HitBox;
+import javafx.geometry.Point2D;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.image.Image;
@@ -27,6 +32,7 @@ import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.RadialGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
+import javafx.scene.shape.Ellipse;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -93,7 +99,29 @@ public class DeltaBladeFactory implements EntityFactory {
         int level = data.get("level");
 
         boolean isBoss = (type == EnemyComponent.EnemyType.BOSS);
+        boolean isUfo = (type == EnemyComponent.EnemyType.UFO);
         int size = isBoss ? BOSS_SIZE : SHIP_SIZE;
+
+        EnemyComponent enemyComponent = new EnemyComponent(type, level);
+
+        if (data.hasKey("kamikaze") && data.<Boolean>get("kamikaze")) {
+            enemyComponent.setKamikaze(true);
+        }
+        if (data.hasKey("bonus") && data.<Boolean>get("bonus")) {
+            enemyComponent.setBonusRunner(true);
+        }
+
+        if (data.hasKey("entering") && data.<Boolean>get("entering")) {
+            double targetX = data.get("targetX");
+            double targetY = data.get("targetY");
+            WaveManager.EntryPath entryPath = data.get("entryPath");
+            int squadId = data.get("squadId");
+            enemyComponent.setEntryData(targetX, targetY, entryPath, squadId);
+        }
+
+        if (isUfo) {
+            return buildUfo(data, enemyComponent);
+        }
 
         String textureName = switch (type) {
             case FAST -> "enemy_fast.png";
@@ -111,20 +139,6 @@ public class DeltaBladeFactory implements EntityFactory {
 
         Node view = safeTexture(textureName, size, size, fallback);
 
-        EnemyComponent enemyComponent = new EnemyComponent(type, level);
-
-        if (data.hasKey("kamikaze") && data.<Boolean>get("kamikaze")) {
-            enemyComponent.setKamikaze(true);
-        }
-
-        if (data.hasKey("entering") && data.<Boolean>get("entering")) {
-            double targetX = data.get("targetX");
-            double targetY = data.get("targetY");
-            WaveManager.EntryPath entryPath = data.get("entryPath");
-            int squadId = data.get("squadId");
-            enemyComponent.setEntryData(targetX, targetY, entryPath, squadId);
-        }
-
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY)
                 .viewWithBBox(view)
@@ -132,6 +146,50 @@ public class DeltaBladeFactory implements EntityFactory {
                 .collidable()
                 .with(enemyComponent)
                 .build();
+    }
+
+    private Entity buildUfo(SpawnData data, EnemyComponent enemyComponent) {
+        int size = 96;
+        Image[] frames = new Image[8];
+        int frameCount = 0;
+        for (int i = 1; i <= 8; i++) {
+            Image frame = EmbeddedTextures.getImage("enemy_ufo_0" + i + ".png", 256, 256);
+            if (frame != null && !frame.isError()) {
+                frames[frameCount++] = frame;
+            }
+        }
+        Image first = frameCount > 0 ? frames[0] : EmbeddedTextures.getImage("enemy_ufo.png", 256, 256);
+        Node view;
+        ImageView imageView = null;
+        if (first != null && !first.isError()) {
+            imageView = new ImageView(first);
+            imageView.setFitWidth(size);
+            imageView.setFitHeight(size);
+            imageView.setPreserveRatio(true);
+            imageView.setSmooth(true);
+            view = imageView;
+        } else {
+            Ellipse body = new Ellipse(size / 2.0, size * 0.62, size * 0.36, size * 0.14);
+            body.setFill(Color.rgb(180, 220, 255));
+            body.setStroke(Color.CYAN);
+            Rectangle space = new Rectangle(size, size);
+            space.setFill(Color.TRANSPARENT);
+            view = new Group(space, body);
+        }
+
+        var builder = FXGL.entityBuilder(data)
+                .type(EntityType.ENEMY)
+                .view(view)
+                .bbox(new HitBox("BODY", new Point2D(14, 46), BoundingShape.box(68, 28)))
+                .zIndex(55)
+                .collidable()
+                .with(enemyComponent);
+        if (imageView != null && frameCount > 1) {
+            Image[] used = new Image[frameCount];
+            System.arraycopy(frames, 0, used, 0, frameCount);
+            builder.with(new UfoAnimComponent(imageView, used));
+        }
+        return builder.build();
     }
 
     @Spawns("playerBullet")
@@ -150,13 +208,47 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("enemyBullet")
     public Entity newEnemyBullet(SpawnData data) {
+        double speedX = data.hasKey("speedX") ? data.<Double>get("speedX") : 0.0;
+        double speedY = data.hasKey("speedY") ? data.<Double>get("speedY") : 250.0;
+        boolean homing = data.hasKey("homing") && data.<Boolean>get("homing");
+
+        Node view;
+        if (homing) {
+            view = missileView();
+        } else {
+            view = safeTexture("bullet_enemy.png", 10, 16, Color.ORANGERED);
+        }
+
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY_BULLET)
-                .viewWithBBox(safeTexture("bullet_enemy.png", 10, 16, Color.ORANGERED))
+                .viewWithBBox(view)
                 .zIndex(75)
                 .collidable()
-                .with(new BulletComponent(250, false))
+                .with(new BulletComponent(speedX, speedY, false, homing))
                 .build();
+    }
+
+    private static Node missileView() {
+        Image img = EmbeddedTextures.getImage("bullet_missile.png", 256, 256);
+        Node sprite;
+        if (img != null && !img.isError()) {
+            ImageView iv = new ImageView(img);
+            iv.setFitWidth(14);
+            iv.setFitHeight(22);
+            iv.setSmooth(true);
+            sprite = iv;
+        } else {
+            Rectangle body = new Rectangle(6, 16);
+            body.setFill(Color.ORANGE);
+            body.setArcWidth(3);
+            body.setArcHeight(3);
+            sprite = body;
+        }
+        Rectangle trail = new Rectangle(3, 12);
+        trail.setFill(Color.rgb(255, 140, 40, 0.75));
+        trail.setTranslateX(5.5);
+        trail.setTranslateY(18);
+        return new Group(trail, sprite);
     }
 
     @Spawns("weaponPickup")
@@ -260,6 +352,53 @@ public class DeltaBladeFactory implements EntityFactory {
         text.setTranslateX(-5);
         text.setTranslateY(5);
         return new Group(glow, text);
+    }
+
+    @Spawns("timePickup")
+    public Entity newTimePickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(safeTexture("pickup_time.png", PICKUP_SIZE, PICKUP_SIZE, Color.LIMEGREEN))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.EXTRA_TIME))
+                .build();
+    }
+
+    @Spawns("rankMarker")
+    public Entity newRankMarker(SpawnData data) {
+        int colorIndex = data.hasKey("colorIndex") ? data.<Integer>get("colorIndex") : 0;
+        colorIndex = Math.max(0, Math.min(RankMarkerComponent.COLORS.length - 1, colorIndex));
+        Color color = RankMarkerComponent.COLORS[colorIndex];
+        Image img = EmbeddedTextures.getImage(RankMarkerComponent.TEXTURES[colorIndex], 256, 256);
+        Node view;
+        double size = 20;
+        if (img != null && !img.isError()) {
+            ImageView iv = new ImageView(img);
+            iv.setFitWidth(size);
+            iv.setFitHeight(size);
+            iv.setSmooth(true);
+            Circle ring = new Circle(size / 2, size / 2, size / 2 - 1.4);
+            ring.setFill(Color.TRANSPARENT);
+            ring.setStroke(color);
+            ring.setStrokeWidth(2.2);
+            view = new Group(iv, ring);
+        } else {
+            Rectangle tile = new Rectangle(size, size);
+            tile.setArcWidth(6);
+            tile.setArcHeight(6);
+            tile.setFill(color);
+            tile.setStroke(Color.WHITE);
+            tile.setStrokeWidth(2.4);
+            view = tile;
+        }
+        return FXGL.entityBuilder(data)
+                .type(EntityType.RANK_MARKER)
+                .viewWithBBox(view)
+                .zIndex(65)
+                .collidable()
+                .with(new RankMarkerComponent(colorIndex))
+                .build();
     }
 
     @Spawns("autofirePickup")

@@ -12,7 +12,8 @@ public class EnemyComponent extends Component {
         BASIC(1, 100, 55, 0.015),
         FAST(1, 150, 80, 0.02),
         TOUGH(3, 300, 45, 0.025),
-        BOSS(10, 1000, 35, 0.04);
+        BOSS(10, 1000, 35, 0.04),
+        UFO(5, 500, 110, 0.045);
         
         public final int health;
         public final int scoreValue;
@@ -32,7 +33,8 @@ public class EnemyComponent extends Component {
         FORMATION,
         DIVING,
         BOSS_HOVER,
-        BOSS_DIVE
+        BOSS_DIVE,
+        UFO_SWEEP
     }
     
     private EnemyType type;
@@ -66,11 +68,16 @@ public class EnemyComponent extends Component {
     private double bossReturnY = 0;
     private boolean bossDiving = false;
     private boolean isKamikaze = false;
+    private boolean isBonusRunner = false;
+    private boolean isUfo = false;
+    private double ufoDir = 1;
+    private int waveLevel = 1;
     
     private static final Random random = new Random();
     
     public EnemyComponent(EnemyType type, int level) {
         this.type = type;
+        this.waveLevel = Math.max(1, level);
         this.health = type.health;
         double levelMultiplier = 1 + (level - 1) * 0.08;
         this.entrySpeed = 60 + level * 5;
@@ -85,6 +92,10 @@ public class EnemyComponent extends Component {
             this.health = deltablade.GameVars.BOSS_BASE_HEALTH + deltablade.GameVars.BOSS_HEALTH_PER_CYCLE * cycle;
             this.speedX = type.speed * (random.nextBoolean() ? 1 : -1);
         }
+        if (type == EnemyType.UFO) {
+            this.isUfo = true;
+            this.ufoDir = random.nextBoolean() ? 1 : -1;
+        }
     }
     
     public void setKamikaze(boolean kamikaze) {
@@ -94,13 +105,28 @@ public class EnemyComponent extends Component {
         }
     }
     
+    public void setBonusRunner(boolean bonusRunner) {
+        this.isBonusRunner = bonusRunner;
+        if (bonusRunner) {
+            this.minFormationTime = 0.15;
+        }
+    }
+
+    public boolean isBonusRunner() {
+        return isBonusRunner;
+    }
+
+    public boolean isUfo() {
+        return isUfo;
+    }
+
     public boolean isBoss() {
         return isBoss;
     }
     
     public void setEntryData(double targetX, double targetY, WaveManager.EntryPath path, int squadId) {
         this.targetX = targetX;
-        this.targetY = targetY;
+        this.targetY = Math.min(targetY, formationCeiling());
         this.entryPath = path;
         this.squadId = squadId;
         this.state = State.ENTERING;
@@ -109,6 +135,11 @@ public class EnemyComponent extends Component {
     
     @Override
     public void onAdded() {
+        if (isUfo && entryPath == null) {
+            state = State.UFO_SWEEP;
+            baseY = entity.getY();
+            return;
+        }
         if (entryPath == null) {
             state = State.FORMATION;
             baseY = entity.getY();
@@ -121,6 +152,13 @@ public class EnemyComponent extends Component {
     
     @Override
     public void onUpdate(double tpf) {
+        try {
+            if (FXGL.<deltablade.DeltaBladeApp>getAppCast().isCombatStopped()) {
+                return;
+            }
+        } catch (Exception ignored) {
+            return;
+        }
         frameCount++;
         if (frameCount <= WARMUP_FRAMES) {
             tpf = Math.min(tpf, 0.008);
@@ -134,9 +172,10 @@ public class EnemyComponent extends Component {
             case DIVING -> updateDiving(tpf);
             case BOSS_HOVER -> updateBossHover(tpf);
             case BOSS_DIVE -> updateBossDive(tpf);
+            case UFO_SWEEP -> updateUfoSweep(tpf);
         }
         
-        if (state != State.ENTERING) {
+        if (!isBonusRunner && (state != State.ENTERING || canFireWhileClimbing())) {
             updateFiring(tpf);
         }
     }
@@ -158,12 +197,17 @@ public class EnemyComponent extends Component {
                 state = State.BOSS_HOVER;
                 baseY = targetY;
                 bossReturnY = targetY;
+            } else if (isUfo) {
+                state = State.UFO_SWEEP;
             } else if (isKamikaze) {
+                startDive();
+            } else if (isBonusRunner) {
                 state = State.DIVING;
+                diveTargetX = targetX;
             } else {
                 state = State.FORMATION;
             }
-            baseY = targetY;
+            baseY = Math.min(targetY, formationCeiling());
             formationHoldTime = 0;
             
             notifySettled();
@@ -180,6 +224,11 @@ public class EnemyComponent extends Component {
                 case FROM_RIGHT_CURVE -> -Math.sin(entryCurvePhase) * 30 * curveFade;
                 case FROM_TOP_SPLIT -> Math.sin(entryCurvePhase * 0.5) * 50 * curveFade;
                 case FROM_SIDE_SWOOP -> Math.sin(entryCurvePhase * 1.5) * 40 * curveFade;
+                case FROM_CENTER -> {
+                    double side = targetX < FXGL.getAppWidth() / 2.0 ? -1 : 1;
+                    yield side * Math.sin(entryCurvePhase * 0.85) * 90 * curveFade;
+                }
+                case FROM_BELOW -> Math.sin(entryCurvePhase * 0.65) * 36 * curveFade;
             };
         }
         
@@ -198,7 +247,8 @@ public class EnemyComponent extends Component {
         formationHoldTime += tpf;
         
         hoverPhase += tpf * 2;
-        double hoverY = baseY + Math.sin(hoverPhase) * hoverAmplitude;
+        baseY = Math.min(baseY, formationCeiling());
+        double hoverY = Math.min(baseY + Math.sin(hoverPhase) * hoverAmplitude, formationCeiling() + 6);
         entity.setY(hoverY);
         
         entity.translateX(speedX * tpf);
@@ -207,6 +257,12 @@ public class EnemyComponent extends Component {
             speedX = -speedX;
         }
         
+        if (isBonusRunner && formationHoldTime > minFormationTime) {
+            startDive();
+            diveTargetX = entity.getX();
+            return;
+        }
+
         if (formationHoldTime > minFormationTime) {
             double diveChance = 0.001 * (1 + FXGL.geti("level") * 0.2);
             if (random.nextDouble() < diveChance) {
@@ -241,13 +297,44 @@ public class EnemyComponent extends Component {
     
     private void updateFiring(double tpf) {
         fireTimer += tpf;
+        boolean angled = type == EnemyType.FAST || type == EnemyType.TOUGH;
+        if (angled) {
+            double gap = waveLevel <= 20 ? 2.4 - (waveLevel - 1) * 0.05 : 1.3;
+            if (fireTimer >= gap) {
+                fireTimer = 0;
+                fireNow();
+            }
+            return;
+        }
         double effectiveFireRate = isBoss ? type.fireRate * 1.5 : type.fireRate;
         if (fireTimer > 0.5 && random.nextDouble() < effectiveFireRate * tpf * 60) {
             fireTimer = 0;
-            FXGL.<deltablade.DeltaBladeApp>getAppCast().spawnEnemyBullet(
-                entity.getX() + entity.getWidth() / 2,
-                entity.getBottomY()
-            );
+            fireNow();
+        }
+    }
+
+    private void fireNow() {
+        FXGL.<deltablade.DeltaBladeApp>getAppCast().spawnEnemyShot(
+            type,
+            entity.getX() + entity.getWidth() / 2,
+            entity.getBottomY()
+        );
+    }
+
+    private void updateUfoSweep(double tpf) {
+        hoverPhase += tpf * 3;
+        baseY = Math.min(baseY, formationCeiling());
+        entity.setY(Math.min(baseY + Math.sin(hoverPhase) * 10, formationCeiling()));
+        entity.translateX(type.speed * ufoDir * tpf);
+
+        double minX = deltablade.GameVars.RAIL_WIDTH + 8;
+        double maxX = FXGL.getAppWidth() - entity.getWidth() - deltablade.GameVars.RAIL_WIDTH - 8;
+        if (entity.getX() <= minX) {
+            entity.setX(minX);
+            ufoDir = 1;
+        } else if (entity.getX() >= maxX) {
+            entity.setX(maxX);
+            ufoDir = -1;
         }
     }
     
@@ -328,6 +415,24 @@ public class EnemyComponent extends Component {
     
     public boolean isEntering() {
         return state == State.ENTERING;
+    }
+
+    public boolean isHarmlessOnContact() {
+        return isEntering()
+                && entryPath != null
+                && entryPath.type == WaveManager.EntryPath.Type.FROM_BELOW;
+    }
+
+    private static double formationCeiling() {
+        return FXGL.getAppHeight() * deltablade.GameVars.FORMATION_MAX_Y_RATIO;
+    }
+
+    private boolean canFireWhileClimbing() {
+        if (state != State.ENTERING || entryPath == null
+                || entryPath.type != WaveManager.EntryPath.Type.FROM_BELOW) {
+            return false;
+        }
+        return entity.getBottomY() < FXGL.getAppHeight() - 130;
     }
     
     public int getSquadId() {

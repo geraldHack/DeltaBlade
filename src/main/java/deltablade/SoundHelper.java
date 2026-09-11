@@ -2,53 +2,87 @@ package deltablade;
 
 import com.almasb.fxgl.audio.Sound;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineUnavailableException;
+import java.io.BufferedInputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-import static com.almasb.fxgl.dsl.FXGL.*;
+import static com.almasb.fxgl.dsl.FXGL.getAssetLoader;
+import static com.almasb.fxgl.dsl.FXGL.getAudioPlayer;
+import static com.almasb.fxgl.dsl.FXGL.getSettings;
 
 /**
- * Safe audio wrapper: missing files never crash, only log once.
+ * WAV effects play through JavaSound so they stay audible next to BGM.
+ * JavaFX AudioClip (FXGL's default) is often silent on recent macOS/JDK builds
+ * while MediaPlayer music still works. MP3 one-shots stay on FXGL.
  */
 public final class SoundHelper {
-    
+
     private static final Set<String> loggedMissing = new HashSet<>();
-    private static final Set<String> loadedSounds = new HashSet<>();
-    
+    private static final double MASTER_VOLUME = 0.55;
+    private static final int MAX_VOICES = 8;
+
+    private static final Map<String, Sample> samples = new ConcurrentHashMap<>();
+    private static final Map<String, List<Clip>> voices = new ConcurrentHashMap<>();
+
+    private record Sample(AudioFormat format, byte[] pcm) {}
+
     private SoundHelper() {}
-    
-    /**
-     * Play a sound by name (e.g. "money.wav").
-     * Loads from assets/sounds/<name>. Logs once if missing, never throws.
-     */
-    public static void play(String name) {
-        if (name == null || name.isEmpty()) return;
-        
+
+    public static void applyMasterVolume() {
         try {
-            if (!loadedSounds.contains(name)) {
-                try {
-                    Sound sound = getAssetLoader().loadSound(name);
-                    if (sound != null) {
-                        loadedSounds.add(name);
-                    }
-                } catch (Exception e) {
-                    if (loggedMissing.add(name)) {
-                        System.err.println("[SoundHelper] Sound not found: " + name);
-                    }
-                    return;
+            getSettings().setGlobalSoundVolume(MASTER_VOLUME);
+        } catch (Exception ignored) {
+        }
+        for (List<Clip> clips : voices.values()) {
+            synchronized (clips) {
+                for (Clip clip : clips) {
+                    applyGain(clip);
                 }
             }
-            getAudioPlayer().playSound(getAssetLoader().loadSound(name));
-        } catch (Exception e) {
-            if (loggedMissing.add(name)) {
-                System.err.println("[SoundHelper] Failed to play sound: " + name + " - " + e.getMessage());
-            }
         }
+    }
+
+    public static void play(String name) {
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        if (name.toLowerCase().endsWith(".mp3")) {
+            playFxgl(name);
+            return;
+        }
+        if (playClip(name)) {
+            return;
+        }
+        playFxgl(name);
     }
 
     public static void stop(String name) {
         if (name == null || name.isEmpty()) {
             return;
+        }
+        List<Clip> clips = voices.get(name);
+        if (clips != null) {
+            synchronized (clips) {
+                for (Clip clip : clips) {
+                    try {
+                        clip.stop();
+                        clip.setFramePosition(0);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
         }
         try {
             Sound sound = getAssetLoader().loadSound(name);
@@ -56,26 +90,143 @@ public final class SoundHelper {
                 getAudioPlayer().stopSound(sound);
             }
         } catch (Exception ignored) {
-            // Audio stack may not be ready during shutdown.
         }
     }
-    
-    /**
-     * Check if a sound file exists and can be loaded.
-     */
+
     public static boolean exists(String name) {
-        if (name == null || name.isEmpty()) return false;
-        if (loadedSounds.contains(name)) return true;
-        
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        if (samples.containsKey(name)) {
+            return true;
+        }
+        return loadSample(name) != null;
+    }
+
+    private static boolean playClip(String name) {
         try {
-            Sound sound = getAssetLoader().loadSound(name);
-            if (sound != null) {
-                loadedSounds.add(name);
-                return true;
+            Sample sample = samples.computeIfAbsent(name, SoundHelper::loadSample);
+            if (sample == null) {
+                return false;
+            }
+            Clip clip = voice(name, sample);
+            if (clip == null) {
+                return false;
+            }
+            applyGain(clip);
+            clip.setFramePosition(0);
+            clip.start();
+            return true;
+        } catch (Exception e) {
+            if (loggedMissing.add("play:" + name)) {
+                System.err.println("[SoundHelper] Clip play failed: " + name + " - " + e.getMessage());
+            }
+            return false;
+        }
+    }
+
+    private static Clip voice(String name, Sample sample) throws LineUnavailableException {
+        List<Clip> clips = voices.computeIfAbsent(name, key -> new ArrayList<>());
+        synchronized (clips) {
+            for (Clip clip : clips) {
+                if (!clip.isRunning()) {
+                    return clip;
+                }
+            }
+            if (clips.size() >= MAX_VOICES) {
+                Clip steal = clips.get(0);
+                steal.stop();
+                return steal;
+            }
+            Clip clip = openClip(sample);
+            clips.add(clip);
+            return clip;
+        }
+    }
+
+    private static Clip openClip(Sample sample) throws LineUnavailableException {
+        DataLine.Info info = new DataLine.Info(Clip.class, sample.format());
+        Clip clip;
+        if (AudioSystem.isLineSupported(info)) {
+            clip = (Clip) AudioSystem.getLine(info);
+        } else {
+            clip = AudioSystem.getClip();
+        }
+        clip.open(sample.format(), sample.pcm(), 0, sample.pcm().length);
+        return clip;
+    }
+
+    private static Sample loadSample(String name) {
+        String path = "/assets/sounds/" + name;
+        try (InputStream raw = SoundHelper.class.getResourceAsStream(path)) {
+            if (raw == null) {
+                if (loggedMissing.add(name)) {
+                    System.err.println("[SoundHelper] Sound not found: " + name);
+                }
+                return null;
+            }
+            try (AudioInputStream in = AudioSystem.getAudioInputStream(new BufferedInputStream(raw))) {
+                AudioFormat source = in.getFormat();
+                AudioInputStream pcmStream = in;
+                AudioFormat pcm = source;
+                if (source.getEncoding() != AudioFormat.Encoding.PCM_SIGNED
+                        || source.getSampleSizeInBits() != 16) {
+                    pcm = new AudioFormat(
+                            AudioFormat.Encoding.PCM_SIGNED,
+                            source.getSampleRate(),
+                            16,
+                            source.getChannels(),
+                            source.getChannels() * 2,
+                            source.getSampleRate(),
+                            false);
+                    pcmStream = AudioSystem.getAudioInputStream(pcm, in);
+                }
+                AudioFormat outFormat = pcmStream.getFormat();
+                byte[] data = pcmStream.readAllBytes();
+                if (pcmStream != in) {
+                    pcmStream.close();
+                }
+                if (data.length == 0) {
+                    return null;
+                }
+                return new Sample(outFormat, data);
             }
         } catch (Exception e) {
-            // Sound doesn't exist
+            if (loggedMissing.add(name)) {
+                System.err.println("[SoundHelper] Failed to load: " + name + " - " + e.getMessage());
+            }
+            return null;
         }
-        return false;
+    }
+
+    private static void applyGain(Clip clip) {
+        try {
+            if (!clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                return;
+            }
+            FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+            float db = (float) (20.0 * Math.log10(Math.max(0.0001, MASTER_VOLUME)));
+            db = Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), db));
+            gain.setValue(db);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void playFxgl(String name) {
+        try {
+            applyMasterVolume();
+            Sound sound = getAssetLoader().loadSound(name);
+            if (sound == null) {
+                if (loggedMissing.add(name)) {
+                    System.err.println("[SoundHelper] Sound not found: " + name);
+                }
+                return;
+            }
+            getAudioPlayer().playSound(sound);
+        } catch (Exception e) {
+            if (loggedMissing.add(name)) {
+                System.err.println("[SoundHelper] Failed to play sound: " + name + " - " + e.getMessage());
+            }
+        }
     }
 }

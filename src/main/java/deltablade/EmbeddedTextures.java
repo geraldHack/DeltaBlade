@@ -111,20 +111,6 @@ public final class EmbeddedTextures {
             return IMAGE_CACHE.get(cacheKey);
         }
 
-        String base64 = TEXTURE_DATA.get(name);
-        if (base64 != null) {
-            try {
-                byte[] pngBytes = Base64.getDecoder().decode(base64);
-                WritableImage img = decodePng(pngBytes, name);
-                if (img != null && img.getWidth() > 0 && img.getHeight() > 0) {
-                    IMAGE_CACHE.put(cacheKey, img);
-                    return img;
-                }
-            } catch (Exception e) {
-                preloadError = e.getMessage();
-            }
-        }
-        
         try {
             java.io.InputStream is = EmbeddedTextures.class.getResourceAsStream("/assets/textures/" + name);
             if (is != null) {
@@ -138,6 +124,20 @@ public final class EmbeddedTextures {
             }
         } catch (Exception e) {
             preloadError = e.getMessage();
+        }
+
+        String base64 = TEXTURE_DATA.get(name);
+        if (base64 != null) {
+            try {
+                byte[] pngBytes = Base64.getDecoder().decode(base64);
+                WritableImage img = decodePng(pngBytes, name);
+                if (img != null && img.getWidth() > 0 && img.getHeight() > 0) {
+                    IMAGE_CACHE.put(cacheKey, img);
+                    return img;
+                }
+            } catch (Exception e) {
+                preloadError = e.getMessage();
+            }
         }
         
         preloadError = "missing key and resource";

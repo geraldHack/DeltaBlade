@@ -403,26 +403,9 @@ public class DeltaBladeFactory implements EntityFactory {
 
     @Spawns("autofirePickup")
     public Entity newAutofirePickup(SpawnData data) {
-        Circle outer = new Circle(14);
-        outer.setFill(new RadialGradient(
-            0, 0, 0.3, 0.3, 0.9, true, CycleMethod.NO_CYCLE,
-            new Stop(0, Color.WHITE),
-            new Stop(0.4, Color.CYAN),
-            new Stop(0.8, Color.DARKCYAN),
-            new Stop(1, Color.rgb(0, 80, 100))
-        ));
-        
-        Text autoText = new Text("A");
-        autoText.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
-        autoText.setFill(Color.WHITE);
-        autoText.setTranslateX(-5);
-        autoText.setTranslateY(5);
-        
-        Group pickup = new Group(outer, autoText);
-        
         return FXGL.entityBuilder(data)
                 .type(EntityType.PICKUP)
-                .viewWithBBox(pickup)
+                .viewWithBBox(safeTexture("pickup_autofire.png", PICKUP_SIZE, PICKUP_SIZE, Color.CYAN))
                 .zIndex(60)
                 .collidable()
                 .with(new PickupComponent(PickupComponent.PickupType.AUTOFIRE))
@@ -861,7 +844,7 @@ public class DeltaBladeFactory implements EntityFactory {
         };
         
         Color highlightColor = coinColor.brighter();
-        
+
         Circle outer = new Circle(8);
         outer.setFill(new RadialGradient(
             0, 0, 0.3, 0.3, 0.8, true, CycleMethod.NO_CYCLE,
@@ -869,14 +852,14 @@ public class DeltaBladeFactory implements EntityFactory {
             new Stop(0.5, coinColor),
             new Stop(1, coinColor.darker())
         ));
-        
+
         Circle highlight = new Circle(3);
         highlight.setFill(Color.rgb(255, 255, 255, 0.7));
         highlight.setCenterX(-2);
         highlight.setCenterY(-2);
-        
+
         Group coinView = new Group(outer, highlight);
-        
+
         return FXGL.entityBuilder(data)
                 .type(EntityType.COIN)
                 .viewWithBBox(coinView)

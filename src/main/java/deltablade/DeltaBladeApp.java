@@ -481,11 +481,6 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         optionsHint.setFill(Color.rgb(120, 160, 190));
         centerHorizontally(optionsHint, 500);
 
-        Text testHint = new Text("TEST  111 Meteor  222 Cognitive  444 Warp  555 UFO  666 Bonus");
-        testHint.setFont(Font.font("Monospace", 11));
-        testHint.setFill(Color.rgb(90, 110, 130));
-        centerHorizontally(testHint, 522);
-        
         titleScreenNodes.add(overlay);
         titleScreenNodes.add(title);
         titleScreenNodes.add(subtitle);
@@ -495,7 +490,6 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         titleScreenNodes.add(controls);
         titleScreenNodes.add(extraInfo);
         titleScreenNodes.add(optionsHint);
-        titleScreenNodes.add(testHint);
         
         for (Node node : titleScreenNodes) {
             getGameScene().addUINode(node);

@@ -11,7 +11,7 @@ import static com.almasb.fxgl.dsl.FXGL.getSettings;
 
 /**
  * Background music: loop the selected catalog track, honor on/off and volume.
- * Player tracks live in {@code ~/Music/DeltaBlade}; bundled files seed that folder.
+ * Player tracks live in the OS music folder ({@code DeltaBlade}); bundled files seed that folder.
  */
 public final class MusicHelper {
 

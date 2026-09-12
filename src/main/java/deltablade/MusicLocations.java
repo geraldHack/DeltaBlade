@@ -1,6 +1,5 @@
 package deltablade;
 
-import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -12,10 +11,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
- * User-facing music folder: {@code ~/Music/DeltaBlade} (Finder: Musik/DeltaBlade).
- * Bundled default tracks are copied there on first launch so the folder is never empty.
+ * User music folder: {@code <Music>/DeltaBlade}.
+ * macOS: ~/Music, Windows: ~/Music, Linux: xdg-user-dir MUSIC (often ~/Musik).
  */
 final class MusicLocations {
 
@@ -33,11 +33,54 @@ final class MusicLocations {
     private MusicLocations() {}
 
     static Path userLibraryDir() {
-        return Path.of(System.getProperty("user.home"), "Music", "DeltaBlade");
+        return musicHome().resolve("DeltaBlade");
     }
 
     static String displayPath() {
-        return "~/Music/DeltaBlade";
+        Path dir = userLibraryDir().toAbsolutePath();
+        String home = System.getProperty("user.home", "");
+        String abs = dir.toString();
+        if (!home.isEmpty() && abs.startsWith(home)) {
+            return "~" + abs.substring(home.length());
+        }
+        return abs;
+    }
+
+    private static Path musicHome() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String home = System.getProperty("user.home", ".");
+        if (os.contains("win")) {
+            String profile = System.getenv("USERPROFILE");
+            return Path.of(profile != null && !profile.isBlank() ? profile : home, "Music");
+        }
+        if (os.contains("mac")) {
+            return Path.of(home, "Music");
+        }
+        Path xdg = xdgMusicDir();
+        if (xdg != null) {
+            return xdg;
+        }
+        Path musik = Path.of(home, "Musik");
+        Path music = Path.of(home, "Music");
+        return Files.isDirectory(musik) && !Files.isDirectory(music) ? musik : music;
+    }
+
+    private static Path xdgMusicDir() {
+        try {
+            Process process = new ProcessBuilder("xdg-user-dir", "MUSIC")
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (!process.waitFor(1, TimeUnit.SECONDS) || process.exitValue() != 0) {
+                return null;
+            }
+            String line = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (line.isEmpty()) {
+                return null;
+            }
+            return Path.of(line);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     static Path ensureUserLibrary() {
@@ -65,10 +108,6 @@ final class MusicLocations {
             }
             if (os.contains("win")) {
                 new ProcessBuilder("explorer", dir.toAbsolutePath().toString()).start();
-                return;
-            }
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().open(dir.toFile());
                 return;
             }
             new ProcessBuilder("xdg-open", dir.toAbsolutePath().toString()).start();

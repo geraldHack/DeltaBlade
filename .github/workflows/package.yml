@@ -30,9 +30,28 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Install WiX
+      - name: Ensure WiX
         if: runner.os == 'Windows'
-        run: choco install wixtoolset --version=3.14.1 -y
+        shell: pwsh
+        run: |
+          $bin = $null
+          if ($env:WIX) {
+            $bin = Join-Path $env:WIX "bin"
+          }
+          if (-not $bin -or -not (Test-Path (Join-Path $bin "light.exe"))) {
+            $home = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($home) {
+              $bin = Join-Path $home.FullName "bin"
+              "WIX=$($home.FullName)\" >> $env:GITHUB_ENV
+            }
+          }
+          if ($bin -and (Test-Path (Join-Path $bin "light.exe"))) {
+            $bin >> $env:GITHUB_PATH
+            Write-Host "Using WiX at $bin"
+          } else {
+            choco install wixtoolset -y --no-progress
+          }
 
       - name: Install fakeroot
         if: runner.os == 'Linux'

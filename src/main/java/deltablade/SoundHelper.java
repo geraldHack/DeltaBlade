@@ -30,19 +30,58 @@ import static com.almasb.fxgl.dsl.FXGL.getSettings;
 public final class SoundHelper {
 
     private static final Set<String> loggedMissing = new HashSet<>();
-    private static final double MASTER_VOLUME = 0.55;
+    private static final double DEFAULT_MASTER = 0.55;
+    private static final double WARP_RATIO = 0.18 / DEFAULT_MASTER;
     private static final int MAX_VOICES = 8;
+    private static final double TARGET_RMS = 32767.0 * Math.pow(10.0, -16.0 / 20.0);
+    private static final double PEAK_CEILING = 32767.0 * Math.pow(10.0, -1.0 / 20.0);
+    private static final String[] WARMUP_SOUNDS = {
+            "shot.wav", "enemy_shot.wav", "explode_ship.wav", "explode_boss.wav",
+            "money.wav", "scoop.wav", "shield.wav", "ammo.wav", "weapon.wav",
+            "autofire.wav", "extra.wav", "extra_life.wav", "extra_time.wav",
+            "bonus_round.wav", "bonus_perfect.wav", "get_ready.wav", "rank_wave.wav",
+            "rank_up.wav", "rank_marker.wav", "hurry_warning.wav", "ufo_appear.wav",
+            "missile_launch.wav"
+    };
 
     private static final Map<String, Sample> samples = new ConcurrentHashMap<>();
     private static final Map<String, List<Clip>> voices = new ConcurrentHashMap<>();
+    private static volatile double previewVolume = -1;
 
     private record Sample(AudioFormat format, byte[] pcm) {}
 
     private SoundHelper() {}
 
+    public static void warmup() {
+        for (String name : WARMUP_SOUNDS) {
+            preload(name, name.equals("shot.wav") || name.equals("enemy_shot.wav") ? 4 : 1);
+        }
+        applyMasterVolume();
+    }
+
+    public static void preload(String name) {
+        preload(name, 1);
+    }
+
+    public static void preload(String name, int voicesToOpen) {
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        Sample sample = samples.computeIfAbsent(name, SoundHelper::loadSample);
+        if (sample == null) {
+            return;
+        }
+        try {
+            for (int i = 0; i < Math.max(1, voicesToOpen); i++) {
+                ensureVoice(name, sample);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     public static void applyMasterVolume() {
         try {
-            getSettings().setGlobalSoundVolume(MASTER_VOLUME);
+            getSettings().setGlobalSoundVolume(masterVolume());
         } catch (Exception ignored) {
         }
         for (List<Clip> clips : voices.values()) {
@@ -52,6 +91,12 @@ public final class SoundHelper {
                 }
             }
         }
+    }
+
+    public static void playPreview(String name, double volume) {
+        previewVolume = Math.max(0.0, Math.min(1.0, volume));
+        play(name);
+        previewVolume = -1;
     }
 
     public static void play(String name) {
@@ -91,6 +136,9 @@ public final class SoundHelper {
             }
         } catch (Exception ignored) {
         }
+        if ("warp.mp3".equalsIgnoreCase(name)) {
+            applyMasterVolume();
+        }
     }
 
     public static boolean exists(String name) {
@@ -113,7 +161,9 @@ public final class SoundHelper {
             if (clip == null) {
                 return false;
             }
-            applyGain(clip);
+            if (clip.isRunning()) {
+                clip.stop();
+            }
             clip.setFramePosition(0);
             clip.start();
             return true;
@@ -138,6 +188,16 @@ public final class SoundHelper {
                 steal.stop();
                 return steal;
             }
+            return ensureVoice(name, sample);
+        }
+    }
+
+    private static Clip ensureVoice(String name, Sample sample) throws LineUnavailableException {
+        List<Clip> clips = voices.computeIfAbsent(name, key -> new ArrayList<>());
+        synchronized (clips) {
+            if (clips.size() >= MAX_VOICES) {
+                return clips.get(0);
+            }
             Clip clip = openClip(sample);
             clips.add(clip);
             return clip;
@@ -153,6 +213,7 @@ public final class SoundHelper {
             clip = AudioSystem.getClip();
         }
         clip.open(sample.format(), sample.pcm(), 0, sample.pcm().length);
+        applyGain(clip);
         return clip;
     }
 
@@ -189,7 +250,7 @@ public final class SoundHelper {
                 if (data.length == 0) {
                     return null;
                 }
-                return new Sample(outFormat, data);
+                return new Sample(outFormat, normalizePcm(data, outFormat));
             }
         } catch (Exception e) {
             if (loggedMissing.add(name)) {
@@ -199,22 +260,80 @@ public final class SoundHelper {
         }
     }
 
+    private static byte[] normalizePcm(byte[] data, AudioFormat format) {
+        if (format.getSampleSizeInBits() != 16 || data.length < 2) {
+            return data;
+        }
+        int count = data.length / 2;
+        double acc = 0;
+        int peak = 1;
+        for (int i = 0; i < count; i++) {
+            int s = (short) ((data[i * 2] & 0xff) | (data[i * 2 + 1] << 8));
+            acc += (double) s * s;
+            int abs = Math.abs(s);
+            if (abs > peak) {
+                peak = abs;
+            }
+        }
+        double rms = Math.sqrt(acc / count);
+        double gain = rms > 1 ? TARGET_RMS / rms : 1.0;
+        if (peak * gain > PEAK_CEILING) {
+            gain = PEAK_CEILING / peak;
+        }
+        if (Math.abs(gain - 1.0) < 0.03) {
+            return data;
+        }
+        byte[] out = data.clone();
+        for (int i = 0; i < count; i++) {
+            int s = (short) ((data[i * 2] & 0xff) | (data[i * 2 + 1] << 8));
+            int v = (int) Math.round(s * gain);
+            if (v > 32767) {
+                v = 32767;
+            } else if (v < -32768) {
+                v = -32768;
+            }
+            out[i * 2] = (byte) v;
+            out[i * 2 + 1] = (byte) (v >> 8);
+        }
+        return out;
+    }
+
     private static void applyGain(Clip clip) {
         try {
             if (!clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                 return;
             }
             FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-            float db = (float) (20.0 * Math.log10(Math.max(0.0001, MASTER_VOLUME)));
+            float db = (float) (20.0 * Math.log10(Math.max(0.0001, masterVolume())));
             db = Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), db));
             gain.setValue(db);
         } catch (Exception ignored) {
         }
     }
 
+    private static double masterVolume() {
+        if (previewVolume >= 0) {
+            return previewVolume;
+        }
+        return OptionsStore.getEffectVolume();
+    }
+
+    private static double volumeOf(String name) {
+        double master = masterVolume();
+        return "warp.mp3".equalsIgnoreCase(name) ? master * WARP_RATIO : master;
+    }
+
     private static void playFxgl(String name) {
+        if (System.getProperty("os.name", "").toLowerCase().contains("linux")
+                && name.toLowerCase().endsWith(".mp3")) {
+            java.net.URL url = SoundHelper.class.getResource("/assets/sounds/" + name);
+            if (url != null) {
+                JavaSoundMusic.playOnce(url, volumeOf(name));
+                return;
+            }
+        }
         try {
-            applyMasterVolume();
+            getSettings().setGlobalSoundVolume(volumeOf(name));
             Sound sound = getAssetLoader().loadSound(name);
             if (sound == null) {
                 if (loggedMissing.add(name)) {

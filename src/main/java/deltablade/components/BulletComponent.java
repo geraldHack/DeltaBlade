@@ -15,6 +15,8 @@ public class BulletComponent extends Component {
     private final double speed;
     private double acquireDelay;
     private double homingLeft;
+    private String shotKind = "bolt";
+    private double wobble;
 
     /** Delay before the missile starts turning. */
     private static final double HOMING_ACQUIRE = 0.10;
@@ -42,6 +44,10 @@ public class BulletComponent extends Component {
         this.homingLeft = homing ? HOMING_DURATION : 0;
     }
 
+    public void setShotKind(String shotKind) {
+        this.shotKind = shotKind != null ? shotKind : "bolt";
+    }
+
     private static final double MAX_TPF = 1.0 / 30.0;
 
     @Override
@@ -61,7 +67,12 @@ public class BulletComponent extends Component {
             }
         }
 
-        entity.translateX(speedX * tpf);
+        if (!isPlayerBullet && !"bolt".equals(shotKind)) {
+            wobble += tpf * ("flame".equals(shotKind) ? 14 : 9);
+            entity.translateX(speedX * tpf + Math.sin(wobble) * ("drip".equals(shotKind) ? 18 : 28) * tpf);
+        } else {
+            entity.translateX(speedX * tpf);
+        }
         entity.translateY(speedY * tpf);
 
         if (homing || Math.abs(speedX) > 8) {

@@ -13,7 +13,8 @@ public class EnemyComponent extends Component {
         FAST(1, 150, 80, 0.02),
         TOUGH(3, 300, 45, 0.025),
         BOSS(10, 1000, 35, 0.04),
-        UFO(5, 500, 110, 0.045);
+        UFO(5, 500, 110, 0.045),
+        MONSTER(2, 160, 48, 0.028);
         
         public final int health;
         public final int scoreValue;
@@ -45,6 +46,8 @@ public class EnemyComponent extends Component {
     private double targetY;
     private WaveManager.EntryPath entryPath;
     private int squadId = -1;
+    private boolean beadMarching;
+    private double beadLaneX;
     
     private double entryProgress = 0;
     private double entrySpeed = 200;
@@ -69,7 +72,18 @@ public class EnemyComponent extends Component {
     private boolean bossDiving = false;
     private boolean isKamikaze = false;
     private boolean isBonusRunner = false;
+    private boolean scooped = false;
+    private boolean docked = false;
+    private int dockSlot = -1;
+    private double scoopTime = 0;
+    private static final double SCOOP_DURATION = 0.85;
+    private static final double DOCK_SCALE = 0.72;
     private boolean isUfo = false;
+    private boolean isMonster = false;
+    private boolean canSplit = false;
+    private boolean hasSplit = false;
+    private boolean diveOnAdd = false;
+    private int spriteIndex = 0;
     private double ufoDir = 1;
     private int waveLevel = 1;
     
@@ -96,6 +110,35 @@ public class EnemyComponent extends Component {
             this.isUfo = true;
             this.ufoDir = random.nextBoolean() ? 1 : -1;
         }
+        if (type == EnemyType.MONSTER) {
+            this.isMonster = true;
+            this.minFormationTime = 1.4 + random.nextDouble() * 1.2;
+            this.diveSpeed *= 0.92;
+        }
+    }
+
+    public void setSpriteIndex(int spriteIndex) {
+        this.spriteIndex = spriteIndex;
+    }
+
+    public int getSpriteIndex() {
+        return spriteIndex;
+    }
+
+    public void setCanSplit(boolean canSplit) {
+        this.canSplit = canSplit;
+    }
+
+    public void beginDiveNow(double targetX) {
+        this.canSplit = false;
+        this.hasSplit = true;
+        this.diveOnAdd = true;
+        this.diveTargetX = targetX;
+        this.state = State.DIVING;
+    }
+
+    public boolean isMonster() {
+        return isMonster;
     }
     
     public void setKamikaze(boolean kamikaze) {
@@ -124,6 +167,10 @@ public class EnemyComponent extends Component {
         return isBoss;
     }
     
+    public void setEntrySpeed(double speed) {
+        this.entrySpeed = speed;
+    }
+
     public void setEntryData(double targetX, double targetY, WaveManager.EntryPath path, int squadId) {
         this.targetX = targetX;
         this.targetY = Math.min(targetY, formationCeiling());
@@ -131,10 +178,16 @@ public class EnemyComponent extends Component {
         this.squadId = squadId;
         this.state = State.ENTERING;
         this.entryProgress = 0;
+        this.beadMarching = path != null && path.beadString;
     }
     
     @Override
     public void onAdded() {
+        if (diveOnAdd) {
+            state = State.DIVING;
+            baseY = entity.getY();
+            return;
+        }
         if (isUfo && entryPath == null) {
             state = State.UFO_SWEEP;
             baseY = entity.getY();
@@ -143,6 +196,10 @@ public class EnemyComponent extends Component {
         if (entryPath == null) {
             state = State.FORMATION;
             baseY = entity.getY();
+            return;
+        }
+        if (beadMarching) {
+            beadLaneX = entity.getX();
         }
     }
     
@@ -165,6 +222,11 @@ public class EnemyComponent extends Component {
         } else {
             tpf = Math.min(tpf, MAX_TPF);
         }
+
+        if (scooped) {
+            updateScooped(tpf);
+            return;
+        }
         
         switch (state) {
             case ENTERING -> updateEntering(tpf);
@@ -180,7 +242,29 @@ public class EnemyComponent extends Component {
         }
     }
     
+    private void updateBeadMarch(double tpf) {
+        boolean fromBelow = entryPath != null && entryPath.type == WaveManager.EntryPath.Type.FROM_BELOW;
+        entity.setX(beadLaneX);
+        double speed = entrySpeed * tpf;
+        if (fromBelow) {
+            entity.translateY(-speed);
+            if (entity.getY() <= 78) {
+                beadMarching = false;
+            }
+        } else {
+            entity.translateY(speed);
+            if (entity.getY() >= 78) {
+                beadMarching = false;
+            }
+        }
+    }
+
     private void updateEntering(double tpf) {
+        if (beadMarching) {
+            updateBeadMarch(tpf);
+            return;
+        }
+
         entryProgress += tpf * entrySpeed / 300.0;
         entryCurvePhase += tpf * 4;
         
@@ -217,7 +301,7 @@ public class EnemyComponent extends Component {
         double moveSpeed = entrySpeed * tpf;
         
         double curveOffset = 0;
-        if (entryPath != null) {
+        if (entryPath != null && !entryPath.beadString) {
             double curveFade = Math.max(0, 1 - entryProgress);
             curveOffset = switch (entryPath.type) {
                 case FROM_LEFT_CURVE -> Math.sin(entryCurvePhase) * 30 * curveFade;
@@ -288,6 +372,13 @@ public class EnemyComponent extends Component {
         
         entity.translateX(horizontalSpeed);
         entity.translateY(diveSpeed * tpf);
+
+        if (canSplit && !hasSplit && isMonster && waveLevel >= deltablade.GameVars.MONSTER_SPLIT_MIN_LEVEL
+                && entity.getY() > FXGL.getAppHeight() * 0.40) {
+            hasSplit = true;
+            FXGL.<deltablade.DeltaBladeApp>getAppCast().splitMonster(entity, this);
+            return;
+        }
         
         if (entity.getY() > FXGL.getAppHeight()) {
             FXGL.<deltablade.DeltaBladeApp>getAppCast().onEnemyLeftScreen(squadId);
@@ -393,6 +484,86 @@ public class EnemyComponent extends Component {
         }
     }
     
+    public boolean isScooped() {
+        return scooped;
+    }
+
+    public boolean isDocked() {
+        return docked;
+    }
+
+    public int getDockSlot() {
+        return dockSlot;
+    }
+
+    public boolean beginScoop(int slot) {
+        if (scooped || docked || isBoss || slot < 0) {
+            return false;
+        }
+        scooped = true;
+        dockSlot = slot;
+        scoopTime = 0;
+        entity.setZIndex(105);
+        return true;
+    }
+
+    public void dock() {
+        docked = true;
+        scooped = true;
+        entity.setScaleX(DOCK_SCALE);
+        entity.setScaleY(DOCK_SCALE);
+        entity.setRotation(0);
+        entity.getViewComponent().setOpacity(1);
+        entity.setZIndex(105);
+        snapToDock();
+    }
+
+    private void updateScooped(double tpf) {
+        if (docked) {
+            snapToDock();
+            return;
+        }
+        scoopTime += tpf;
+        double t = Math.min(1.0, scoopTime / SCOOP_DURATION);
+        double ease = t * t * (3.0 - 2.0 * t);
+        pullTowardDock(0.08 + ease * 0.22);
+        entity.setRotation(ease * 360);
+        double scale = 1.0 + (DOCK_SCALE - 1.0) * ease;
+        entity.setScaleX(scale);
+        entity.setScaleY(scale);
+        entity.getViewComponent().setOpacity(1);
+        if (scoopTime >= SCOOP_DURATION && entity.isActive()) {
+            FXGL.<deltablade.DeltaBladeApp>getAppCast().completeScoop(entity, this);
+        }
+    }
+
+    private void snapToDock() {
+        applyDockPose(1);
+    }
+
+    private void pullTowardDock(double pull) {
+        applyDockPose(Math.min(1.0, pull));
+    }
+
+    private void applyDockPose(double pull) {
+        try {
+            var player = FXGL.getGameWorld().getSingleton(deltablade.EntityType.PLAYER);
+            double offsetX = dockSlot == 0 ? -44 : 44;
+            double tx = player.getX() + player.getWidth() / 2.0 + offsetX - entity.getWidth() / 2.0;
+            double ty = player.getY() + 4;
+            entity.setX(entity.getX() + (tx - entity.getX()) * pull);
+            entity.setY(entity.getY() + (ty - entity.getY()) * pull);
+            if (pull >= 1) {
+                entity.setX(tx);
+                entity.setY(ty);
+                entity.setRotation(0);
+                entity.setScaleX(DOCK_SCALE);
+                entity.setScaleY(DOCK_SCALE);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     public void hit() {
         health--;
     }
@@ -418,9 +589,12 @@ public class EnemyComponent extends Component {
     }
 
     public boolean isHarmlessOnContact() {
+        if (scooped) {
+            return true;
+        }
         return isEntering()
                 && entryPath != null
-                && entryPath.type == WaveManager.EntryPath.Type.FROM_BELOW;
+                && (entryPath.beadString || entryPath.type == WaveManager.EntryPath.Type.FROM_BELOW);
     }
 
     private static double formationCeiling() {

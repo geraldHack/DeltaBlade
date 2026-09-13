@@ -9,7 +9,7 @@ public class CoinComponent extends Component {
         WHITE(10, 80),
         GREEN(50, 80),
         BLUE(100, 80),
-        VIOLET(1000, 240);
+        VIOLET(200, 240);
         
         public final int value;
         public final double fallSpeed;

@@ -11,9 +11,11 @@ public final class OptionsStore {
 
     private static final String KEY_MUSIC_ENABLED = "musicEnabled";
     private static final String KEY_MUSIC_VOLUME = "musicVolume";
+    private static final String KEY_EFFECT_VOLUME = "effectVolume";
     private static final String KEY_MUSIC_TRACK = "musicTrack";
 
     public static final double DEFAULT_MUSIC_VOLUME = 0.55;
+    public static final double DEFAULT_EFFECT_VOLUME = 0.55;
 
     private OptionsStore() {}
 
@@ -31,6 +33,14 @@ public final class OptionsStore {
 
     public static void setMusicVolume(double volume) {
         PREFS.putDouble(KEY_MUSIC_VOLUME, clamp01(volume));
+    }
+
+    public static double getEffectVolume() {
+        return clamp01(PREFS.getDouble(KEY_EFFECT_VOLUME, DEFAULT_EFFECT_VOLUME));
+    }
+
+    public static void setEffectVolume(double volume) {
+        PREFS.putDouble(KEY_EFFECT_VOLUME, clamp01(volume));
     }
 
     public static String getSelectedTrackId() {

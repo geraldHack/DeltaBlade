@@ -17,9 +17,11 @@ public class WaveManager {
         FIGHTERS,
         MIXED,
         RANK,
+        PEARL,
         BONUS,
         BOSS,
-        KAMIKAZE
+        KAMIKAZE,
+        MONSTER
     }
 
     public enum FormationType {
@@ -102,9 +104,11 @@ public class WaveManager {
             case FIGHTERS -> setupFightersWave(level);
             case MIXED -> setupMixedWave(level);
             case RANK -> setupRankWave(level);
+            case PEARL -> setupPearlWave(level);
             case BONUS -> setupBonusWave(level);
             case BOSS -> setupBossWave(level);
             case KAMIKAZE -> setupKamikazeWave(level);
+            case MONSTER -> setupMonsterWave(level);
         }
 
         set(GameVars.ENEMIES_REMAINING, totalEnemiesInWave);
@@ -115,13 +119,17 @@ public class WaveManager {
         if (level > 0 && level % 25 == 0) {
             return WaveType.BOSS;
         }
-        int slot = ((level - 1) % 4) + 1;
+        if (level >= GameVars.MONSTER_WAVE_MIN_LEVEL && level % 8 == 6) {
+            return WaveType.MONSTER;
+        }
+        int slot = ((level - 1) % 5) + 1;
         return switch (slot) {
             case 1 -> WaveType.FIGHTERS;
             case 2 -> WaveType.MIXED;
-            case 3 -> WaveType.RANK;
-            case 4 -> {
-                int pack = (level - 1) / 4;
+            case 3 -> WaveType.PEARL;
+            case 4 -> WaveType.RANK;
+            case 5 -> {
+                int pack = (level - 1) / 5;
                 yield (pack % 2 == 0) ? WaveType.BONUS : WaveType.KAMIKAZE;
             }
             default -> WaveType.FIGHTERS;
@@ -158,6 +166,38 @@ public class WaveManager {
         squadsToSpawn = 2;
     }
 
+    private void setupPearlWave(int level) {
+        int cycle = (level - 1) / 5 + 1;
+        int total = Math.min(18 + cycle * 4, 28);
+        if (total % 2 != 0) {
+            total++;
+        }
+        generatePearlSlots(total);
+        totalEnemiesInWave = formationSlots.size();
+        squadsToSpawn = 1;
+    }
+
+    private void generatePearlSlots(int count) {
+        double left = GameVars.RAIL_WIDTH + 24;
+        double right = getAppWidth() - GameVars.RAIL_WIDTH - 24;
+        double width = right - left;
+        int rows = count > 20 ? 3 : 2;
+        int perRow = (int) Math.ceil(count / (double) rows);
+        double gap = Math.max(44, Math.min(58, width / perRow));
+        double used = Math.max(0, perRow - 1) * gap;
+        double startX = left + Math.max(0, (width - used) / 2.0);
+        int created = 0;
+        for (int row = 0; row < rows && created < count; row++) {
+            int inRow = Math.min(perRow, count - created);
+            double rowStart = startX + (perRow - inRow) * gap / 2.0;
+            double y = clampFormationY(52 + row * 50);
+            for (int col = 0; col < inRow; col++) {
+                formationSlots.add(new Point2D(rowStart + col * gap, y));
+                created++;
+            }
+        }
+    }
+
     private void setupBonusWave(int level) {
         int cycle = (level - 1) / 4 + 1;
         int total = Math.min(10 + cycle * 2, 16);
@@ -181,6 +221,15 @@ public class WaveManager {
 
         totalEnemiesInWave = 1 + escortCount;
         squadsToSpawn = 1;
+    }
+
+    private void setupMonsterWave(int level) {
+        int cycle = Math.max(1, (level - 5) / 8 + 1);
+        int total = Math.min(8 + cycle * 2, 14);
+        generateFormationSlots(cycle % 2 == 0 ? FormationType.STAGGERED : FormationType.V_FORMATION, total);
+        totalEnemiesInWave = formationSlots.size();
+        squadsToSpawn = 2 + cycle % 2;
+        squadSpawnDelay = 2.1;
     }
 
     private void setupKamikazeWave(int level) {
@@ -358,6 +407,8 @@ public class WaveManager {
 
         if (currentWaveType == WaveType.BOSS && activeSquads.isEmpty()) {
             squadSize = remaining;
+        } else if (currentWaveType == WaveType.PEARL) {
+            squadSize = remaining;
         } else {
             int baseSize = Math.max(3, remaining / Math.max(squadsToSpawn + 1, 1));
             squadSize = Math.min(baseSize, 5);
@@ -366,10 +417,13 @@ public class WaveManager {
 
         if (squadSize <= 0) return;
 
+        EntryPath path = generateEntryPath();
+        if (currentWaveType == WaveType.PEARL && path.pairGap > 0.5 && squadSize % 2 == 1 && remaining > squadSize) {
+            squadSize++;
+        }
+
         Squad squad = new Squad(activeSquads.size(), squadSize);
         activeSquads.add(squad);
-
-        EntryPath path = generateEntryPath();
 
         for (int i = 0; i < squadSize && enemiesSpawned < totalEnemiesInWave; i++) {
             Point2D targetSlot = formationSlots.get(enemiesSpawned);
@@ -380,8 +434,22 @@ public class WaveManager {
             final int squadIdFinal = squad.id;
             final EnemyComponent.EnemyType finalType = type;
 
-            double startX = path.startX + (index - (squadSize - 1) / 2.0) * 42;
-            double startY = path.startY + (path.type == EntryPath.Type.FROM_BELOW ? -index * 18 : index * 18);
+            boolean paired = currentWaveType == WaveType.PEARL && path.pairGap > 0.5;
+            int pairIndex = paired ? index / 2 : index;
+            double laneShift = 0;
+            if (paired) {
+                laneShift = (index % 2 == 0 ? -0.5 : 0.5) * path.pairGap;
+            } else if (currentWaveType != WaveType.PEARL) {
+                laneShift = (index - (squadSize - 1) / 2.0) * 42;
+            }
+            double startX = path.startX + laneShift;
+            double startY;
+            if (currentWaveType == WaveType.PEARL) {
+                double trail = pairIndex * 44;
+                startY = path.type == EntryPath.Type.FROM_BELOW ? path.startY + trail : path.startY - trail;
+            } else {
+                startY = path.startY + (path.type == EntryPath.Type.FROM_BELOW ? -index * 18 : index * 18);
+            }
 
             Runnable spawnEnemy = () -> {
                 if (stopped) {
@@ -402,12 +470,21 @@ public class WaveManager {
                 if (currentWaveType == WaveType.BONUS) {
                     spawnData.put("bonus", true);
                 }
+                if (currentWaveType == WaveType.PEARL) {
+                    spawnData.put("entrySpeed", 140.0);
+                }
+                if (finalType == EnemyComponent.EnemyType.MONSTER) {
+                    int sprite = SpriteSheets.monsterTileFor(index);
+                    spawnData.put("spriteIndex", sprite);
+                    spawnData.put("canSplit", currentLevel >= GameVars.MONSTER_SPLIT_MIN_LEVEL
+                            && (sprite == 0 || sprite == 2 || sprite == 4));
+                }
 
                 Entity enemy = spawn("enemy", spawnData);
                 squad.addEnemy(enemy);
             };
 
-            if (index == 0) {
+            if (currentWaveType == WaveType.PEARL || index == 0) {
                 spawnEnemy.run();
             } else {
                 double delay = currentWaveType == WaveType.KAMIKAZE || currentWaveType == WaveType.BONUS
@@ -423,7 +500,8 @@ public class WaveManager {
     private EntryPath generateEntryPath() {
         int squadIndex = Math.max(0, activeSquads.size() - 1);
         return switch (currentWaveType) {
-            case FIGHTERS, MIXED, BONUS -> mixedPath(squadIndex);
+            case FIGHTERS, MIXED, BONUS, MONSTER -> mixedPath(squadIndex);
+            case PEARL -> pearlPath(squadIndex);
             case RANK -> squadIndex % 2 == 0
                     ? new EntryPath(getAppWidth() / 2.0, -50, EntryPath.Type.FROM_CENTER)
                     : new EntryPath(getAppWidth() / 2.0, -50, EntryPath.Type.FROM_TOP_SPLIT);
@@ -435,6 +513,17 @@ public class WaveManager {
                     ? new EntryPath(-50, y, EntryPath.Type.FROM_LEFT_CURVE)
                     : new EntryPath(getAppWidth() + 50, y, EntryPath.Type.FROM_RIGHT_CURVE);
             }
+        };
+    }
+
+    private EntryPath pearlPath(int squadIndex) {
+        double mid = getAppWidth() / 2.0;
+        double playable = getAppWidth() - 2.0 * GameVars.RAIL_WIDTH;
+        int pattern = Math.floorMod(currentLevel + squadIndex, 3);
+        return switch (pattern) {
+            case 0 -> new EntryPath(mid, getAppHeight() + 8, EntryPath.Type.FROM_BELOW, 46, true);
+            case 1 -> new EntryPath(mid, getAppHeight() + 8, EntryPath.Type.FROM_BELOW, playable * 0.56, true);
+            default -> new EntryPath(mid, -40, EntryPath.Type.FROM_CENTER, 46, true);
         };
     }
 
@@ -472,6 +561,20 @@ public class WaveManager {
 
         if (currentWaveType == WaveType.BONUS) {
             return slotIndex % 4 == 1 ? EnemyComponent.EnemyType.FAST : EnemyComponent.EnemyType.BASIC;
+        }
+
+        if (currentWaveType == WaveType.PEARL) {
+            if (slotIndex % 5 == 0 && currentLevel >= 4) {
+                return EnemyComponent.EnemyType.TOUGH;
+            }
+            if (slotIndex % 4 == 1) {
+                return EnemyComponent.EnemyType.FAST;
+            }
+            return EnemyComponent.EnemyType.BASIC;
+        }
+
+        if (currentWaveType == WaveType.MONSTER) {
+            return EnemyComponent.EnemyType.MONSTER;
         }
 
         if (currentWaveType == WaveType.MIXED) {
@@ -576,8 +679,12 @@ public class WaveManager {
         }
     }
 
+    public boolean hasPendingSpawns() {
+        return !stopped && enemiesSpawned < totalEnemiesInWave;
+    }
+
     public boolean isWaveComplete() {
-        return geti(GameVars.ENEMIES_REMAINING) <= 0;
+        return !stopped && enemiesSpawned >= totalEnemiesInWave && geti(GameVars.ENEMIES_REMAINING) <= 0;
     }
 
     public WaveType getCurrentWaveType() {
@@ -597,11 +704,23 @@ public class WaveManager {
         public final double startX;
         public final double startY;
         public final Type type;
+        public final double pairGap;
+        public final boolean beadString;
 
         public EntryPath(double startX, double startY, Type type) {
+            this(startX, startY, type, 0, false);
+        }
+
+        public EntryPath(double startX, double startY, Type type, double pairGap) {
+            this(startX, startY, type, pairGap, false);
+        }
+
+        public EntryPath(double startX, double startY, Type type, double pairGap, boolean beadString) {
             this.startX = startX;
             this.startY = startY;
             this.type = type;
+            this.pairGap = pairGap;
+            this.beadString = beadString;
         }
     }
 }

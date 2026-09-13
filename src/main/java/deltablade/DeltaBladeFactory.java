@@ -51,6 +51,19 @@ public class DeltaBladeFactory implements EntityFactory {
      * Falls back to a triangle polygon if name is missing from embed.
      * NEVER returns a Rectangle - squares are the visual bug indicator.
      */
+    private static Node sheetTile(String sheet, int index, int size, Color fallback) {
+        Image tile = SpriteSheets.tile(sheet, index);
+        if (tile != null && !tile.isError()) {
+            ImageView view = new ImageView(tile);
+            view.setFitWidth(size);
+            view.setFitHeight(size);
+            view.setPreserveRatio(true);
+            view.setSmooth(false);
+            return view;
+        }
+        return EmbeddedTextures.createFallbackShip(size, fallback);
+    }
+
     private static Node safeTexture(String name, int w, int h, Color fallback) {
         Image img = EmbeddedTextures.getImage(name, w, h);
         if (img != null && !img.isError()) {
@@ -111,6 +124,10 @@ public class DeltaBladeFactory implements EntityFactory {
             enemyComponent.setBonusRunner(true);
         }
 
+        if (data.hasKey("entrySpeed")) {
+            enemyComponent.setEntrySpeed(data.get("entrySpeed"));
+        }
+
         if (data.hasKey("entering") && data.<Boolean>get("entering")) {
             double targetX = data.get("targetX");
             double targetY = data.get("targetY");
@@ -119,25 +136,56 @@ public class DeltaBladeFactory implements EntityFactory {
             enemyComponent.setEntryData(targetX, targetY, entryPath, squadId);
         }
 
+        if (data.hasKey("spriteIndex")) {
+            enemyComponent.setSpriteIndex(data.get("spriteIndex"));
+        }
+        if (data.hasKey("canSplit") && data.<Boolean>get("canSplit")) {
+            enemyComponent.setCanSplit(true);
+        }
+        if (data.hasKey("diveNow") && data.<Boolean>get("diveNow")) {
+            double diveX = data.hasKey("diveTargetX") ? data.get("diveTargetX") : data.getX();
+            enemyComponent.beginDiveNow(diveX);
+        }
+
         if (isUfo) {
             return buildUfo(data, enemyComponent);
         }
 
-        String textureName = switch (type) {
-            case FAST -> "enemy_fast.png";
-            case TOUGH -> "enemy_tough.png";
-            case BOSS -> "enemy_tough.png";
-            default -> "enemy_basic.png";
-        };
-
-        Color fallback = switch (type) {
-            case FAST -> Color.LIME;
-            case TOUGH -> Color.MEDIUMPURPLE;
-            case BOSS -> Color.DARKVIOLET;
-            default -> Color.CRIMSON;
-        };
-
-        Node view = safeTexture(textureName, size, size, fallback);
+        Node view;
+        if (type == EnemyComponent.EnemyType.MONSTER) {
+            int tile = data.hasKey("spriteIndex")
+                    ? data.get("spriteIndex")
+                    : SpriteSheets.monsterTileFor((int) (Math.random() * SpriteSheets.MONSTER_TILES));
+            enemyComponent.setSpriteIndex(tile);
+            view = sheetTile(SpriteSheets.MONSTERS, tile, size, Color.MEDIUMPURPLE);
+        } else if (type != EnemyComponent.EnemyType.BOSS) {
+            boolean useClassic = Math.random() < 0.45;
+            if (useClassic) {
+                String textureName = switch (type) {
+                    case FAST -> "enemy_fast.png";
+                    case TOUGH -> "enemy_tough.png";
+                    default -> "enemy_basic.png";
+                };
+                Color fallback = switch (type) {
+                    case FAST -> Color.LIME;
+                    case TOUGH -> Color.MEDIUMPURPLE;
+                    default -> Color.CRIMSON;
+                };
+                view = safeTexture(textureName, size, size, fallback);
+            } else {
+                int tile = SpriteSheets.shipTileFor(type, data.hasKey("spriteIndex")
+                        ? data.get("spriteIndex")
+                        : (int) (Math.random() * 32));
+                int drawSize = switch (type) {
+                    case FAST -> Math.max(40, size - 6);
+                    case TOUGH -> size + 8;
+                    default -> size;
+                };
+                view = sheetTile(SpriteSheets.SHIPS, tile, drawSize, Color.CRIMSON);
+            }
+        } else {
+            view = safeTexture("enemy_tough.png", size, size, Color.DARKVIOLET);
+        }
 
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY)
@@ -211,21 +259,52 @@ public class DeltaBladeFactory implements EntityFactory {
         double speedX = data.hasKey("speedX") ? data.<Double>get("speedX") : 0.0;
         double speedY = data.hasKey("speedY") ? data.<Double>get("speedY") : 250.0;
         boolean homing = data.hasKey("homing") && data.<Boolean>get("homing");
+        String kind = data.hasKey("kind") ? data.get("kind") : "bolt";
 
         Node view;
         if (homing) {
             view = missileView();
+        } else if (!"bolt".equals(kind)) {
+            view = gooView(kind);
         } else {
             view = safeTexture("bullet_enemy.png", 10, 16, Color.ORANGERED);
         }
 
+        BulletComponent bullet = new BulletComponent(speedX, speedY, false, homing);
+        bullet.setShotKind(kind);
         return FXGL.entityBuilder(data)
                 .type(EntityType.ENEMY_BULLET)
                 .viewWithBBox(view)
                 .zIndex(75)
                 .collidable()
-                .with(new BulletComponent(speedX, speedY, false, homing))
+                .with(bullet)
                 .build();
+    }
+
+    private static Node gooView(String kind) {
+        return switch (kind) {
+            case "drip" -> {
+                Ellipse drop = new Ellipse(4, 7);
+                drop.setFill(Color.rgb(80, 220, 140, 0.95));
+                drop.setStroke(Color.rgb(30, 90, 60));
+                drop.setStrokeWidth(1);
+                yield drop;
+            }
+            case "flame" -> {
+                Ellipse flame = new Ellipse(5, 8);
+                flame.setFill(new RadialGradient(0, 0, 0.5, 0.7, 0.7, true, CycleMethod.NO_CYCLE,
+                        new Stop(0, Color.rgb(255, 240, 140)),
+                        new Stop(0.45, Color.ORANGE),
+                        new Stop(1, Color.rgb(180, 40, 0, 0.2))));
+                yield flame;
+            }
+            default -> {
+                Circle blob = new Circle(6, Color.rgb(170, 70, 220, 0.92));
+                blob.setStroke(Color.rgb(80, 20, 120));
+                blob.setStrokeWidth(1.2);
+                yield blob;
+            }
+        };
     }
 
     private static Node missileView() {
@@ -398,6 +477,28 @@ public class DeltaBladeFactory implements EntityFactory {
                 .zIndex(65)
                 .collidable()
                 .with(new RankMarkerComponent(colorIndex))
+                .build();
+    }
+
+    @Spawns("scoopPickup")
+    public Entity newScoopPickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(safeTexture("pickup_scoop.png", PICKUP_SIZE, PICKUP_SIZE, Color.LIMEGREEN))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.SCOOP))
+                .build();
+    }
+
+    @Spawns("shieldPickup")
+    public Entity newShieldPickup(SpawnData data) {
+        return FXGL.entityBuilder(data)
+                .type(EntityType.PICKUP)
+                .viewWithBBox(safeTexture("pickup_shield.png", PICKUP_SIZE, PICKUP_SIZE, Color.AQUA))
+                .zIndex(60)
+                .collidable()
+                .with(new PickupComponent(PickupComponent.PickupType.SHIELD))
                 .build();
     }
 

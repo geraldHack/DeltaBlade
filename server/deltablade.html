@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeltaBlade – Spoteroxe</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Risque&family=DM+Sans:ital,wght@0,400;0,600;1,400&display=swap"
+    rel="stylesheet">
+  <style>
+    .db-copy {
+      color: #c5cdd6;
+      font-size: 1.08rem;
+      line-height: 1.65;
+      font-family: "DM Sans", sans-serif;
+      text-align: left;
+    }
+
+    .db-kicker {
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 0.78rem;
+      color: #6ec1e4;
+    }
+
+    .db-panel {
+      background: #14181e;
+      border: 1px solid rgba(110, 193, 228, 0.22);
+      border-radius: 12px;
+    }
+
+    .db-score {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .db-panel h2,
+    .db-kicker {
+      font-family: "DM Sans", sans-serif;
+    }
+
+    .db-score th {
+      color: #6ec1e4;
+      font-weight: 600;
+      border-bottom-color: rgba(110, 193, 228, 0.28);
+    }
+
+    .db-score td {
+      border-color: rgba(255, 255, 255, 0.06);
+      color: #e8eef4;
+    }
+
+    .db-score tr.db-top-1 td:first-child { color: #f4d35e; }
+    .db-score tr.db-top-2 td:first-child { color: #d0d7de; }
+    .db-score tr.db-top-3 td:first-child { color: #d08b4c; }
+
+    .db-pager .btn {
+      min-width: 7rem;
+    }
+  </style>
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/"
+        style="font-family: var(--font-display); color: var(--color-primary) !important;">Spoteroxe</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain"
+        aria-controls="navMain" aria-expanded="false" aria-label="Menü">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navMain">
+        <ul class="navbar-nav ms-auto gap-2 gap-lg-3">
+          <li class="nav-item"><a class="nav-link" href="minecraft.html">Minecraftserver</a></li>
+          <li class="nav-item"><a class="nav-link active" href="deltablade.html">DeltaBlade</a></li>
+          <li class="nav-item"><a class="nav-link" href="downloads.html">Downloads</a></li>
+          <li class="nav-item"><a class="nav-link" href="manuskript.html">Manuskript</a></li>
+          <li class="nav-item"><a class="nav-link" href="romanprojekte/">Romanprojekte</a></li>
+          <li class="nav-item"><a class="nav-link" href="/privat">Privat</a></li>
+          <li class="nav-item"><a class="nav-link" href="/">home</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-5 flex-grow-1">
+    <div class="row justify-content-center gy-5">
+      <div class="col-lg-8 text-center">
+        <p class="db-kicker mb-2">Arcade-Shooter</p>
+        <img src="bilder/deltablade-logo.png" alt="DeltaBlade" class="img-fluid mb-4" style="max-width: 520px;">
+        <p class="db-copy mb-3">
+          DeltaBlade ist ein Arcade-Shooter. Du fliegst unten, die Gegner kommen in Wellen:
+          normal, gemischt, Rang, Bonus, zwischendurch Kamikaze. Alle 25 Wellen ein Boss.
+          Die Extra-Zeit läuft mit; bei null kommt ein UFO.
+        </p>
+        <p class="db-copy mb-3">
+          Waffen, Münzen, Scoop und Schild gibt’s als Drops.
+          Eine Welle ohne Treffer ist eine Combo.
+          Eine ganze Bonusrunde ohne Treffer gibt 20.000 Punkte.
+          Sechs Rangmarker = ein Rang höher.
+        </p>
+        <p class="db-copy mb-3">
+          Highscores speichert das Spiel bei dir. Zusätzlich landen sie hier in der Liste.
+        </p>
+        <p class="small text-secondary mb-4">
+          Steuerung: Pfeile oder WASD, schießen mit Leertaste oder X
+        </p>
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+          <a href="downloads.html#deltablade" class="btn btn-primary">macOS</a>
+          <a href="downloads.html#deltablade-windows" class="btn btn-primary">Windows</a>
+          <a href="downloads.html#deltablade-linux" class="btn btn-primary">Linux</a>
+          <a href="downloads.html#deltablade-appimage" class="btn btn-primary">AppImage</a>
+        </div>
+        <p class="db-copy small text-secondary mt-3 mb-0">
+          macOS: DMG öffnen, dann Installieren.command.
+          Wenn macOS das Spiel blockiert (kein Entwicklerzertifikat):
+          Systemeinstellungen → Datenschutz &amp; Sicherheit, ganz unten „Trotzdem öffnen“.
+          Oder Rechtsklick auf die App → Öffnen.
+          Steht da „beschädigt“, im Terminal: <code>xattr -cr</code> auf die DMG
+          bzw. auf <code>/Applications/DeltaBlade.app</code>.
+        </p>
+      </div>
+
+      <div class="col-lg-8" id="hiscore">
+        <div class="db-panel p-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+            <div>
+              <p class="db-kicker mb-1">Global</p>
+              <h2 class="h4 text-light mb-0">Bestenliste</h2>
+            </div>
+            <p class="small text-secondary mb-0" id="db-score-meta">Lade Einträge …</p>
+          </div>
+          <p class="small text-secondary mb-3">
+            Alle gespeicherten Läufe, nicht nur die Top 10 aus dem Spiel.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm table-borderless db-score mb-3">
+              <thead>
+                <tr>
+                  <th scope="col" class="ps-2">#</th>
+                  <th scope="col">Name</th>
+                  <th scope="col" class="text-end">Punkte</th>
+                  <th scope="col" class="text-end pe-2">Welle</th>
+                </tr>
+              </thead>
+              <tbody id="db-score-body">
+                <tr>
+                  <td colspan="4" class="text-secondary">…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 db-pager">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="db-score-prev" disabled>Zurück</button>
+            <p class="small text-secondary mb-0" id="db-score-page">Seite 1</p>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="db-score-next" disabled>Weiter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer py-3 mt-auto border-top border-secondary">
+    <div class="container text-center text-secondary small">
+      <p class="mb-0">Spoteroxe</p>
+    </div>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    crossorigin="anonymous"></script>
+  <script src="js/main.js"></script>
+  <script src="js/deltablade-scoreboard.js?v=20260912c"></script>
+</body>
+
+</html>

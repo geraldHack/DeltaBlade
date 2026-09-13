@@ -43,6 +43,7 @@ public class PlayerAnimationComponent extends Component {
     private boolean holdLast = false;
 
     private Image currentSheet;
+    private boolean scooping;
 
     public PlayerAnimationComponent(Image thrusterSheet, Image bankSheet, Image bowwaveSheet) {
         this(thrusterSheet, bankSheet, bowwaveSheet, null);
@@ -66,6 +67,22 @@ public class PlayerAnimationComponent extends Component {
 
     public ImageView getView() {
         return imageView;
+    }
+
+    public void setScooping(boolean scooping) {
+        if (this.scooping == scooping) {
+            return;
+        }
+        this.scooping = scooping;
+        Image newSheet = getSheetForState(currentState);
+        if (newSheet != null && newSheet != currentSheet) {
+            currentSheet = newSheet;
+            imageView.setImage(currentSheet);
+        }
+        applyRange(currentState);
+        elapsed = 0;
+        currentFrame = frameMin;
+        imageView.setViewport(new Rectangle2D(currentFrame * FRAME_WIDTH, 0, FRAME_WIDTH, FRAME_HEIGHT));
     }
 
     public void setState(AnimationState newState) {
@@ -109,6 +126,11 @@ public class PlayerAnimationComponent extends Component {
     }
 
     private Image getSheetForState(AnimationState state) {
+        if (scooping && bowwaveSheet != null
+                && state != AnimationState.BANKING_LEFT
+                && state != AnimationState.BANKING_RIGHT) {
+            return bowwaveSheet;
+        }
         return switch (state) {
             case BANKING_LEFT, BANKING_RIGHT -> bankSheet != null ? bankSheet : thrusterSheet;
             case MOVING_UP -> bowwaveSheet != null ? bowwaveSheet : thrusterSheet;

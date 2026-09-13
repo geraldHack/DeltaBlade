@@ -79,10 +79,12 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     private boolean warping = false;
     private double warpElapsed = 0;
     private Rectangle warpFlash;
-    private double extraTime = GameVars.EXTRA_TIME_MAX;
+    private int extraTimeMax = GameVars.LEVEL_TIME_INITIAL;
+    private double extraTime = GameVars.LEVEL_TIME_INITIAL;
     private boolean extraTimeWarned = false;
     private boolean ufoSpawnedThisWave = false;
     private double extraTimePulse = 0;
+    private double scoopHitLock = 0;
     
     private static final Random random = new Random();
     private int frameCount = 0;
@@ -497,7 +499,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         
         installEscFilter();
         MusicHelper.applyFromStore();
-        SoundHelper.applyMasterVolume();
+        SoundHelper.warmup();
         
         if (preloadError != null) {
             showBanner(preloadError, Color.RED);
@@ -743,8 +745,13 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         set(GameVars.METEOR_WINS, 0);
         set(GameVars.RANK, 0);
         set(GameVars.RANK_MASK, 0);
-        extraTime = GameVars.EXTRA_TIME_MAX;
-        extraTimeWarned = false;
+        extraTimeMax = GameVars.LEVEL_TIME_INITIAL;
+        refillWaveTimer();
+        if (player != null && player.hasComponent(PlayerComponent.class)) {
+            player.getComponent(PlayerComponent.class).clearShield();
+        }
+        clearScoops();
+        updateShieldHud();
         ufoSpawnedThisWave = false;
         for (String var : GameVars.EXTRA_VARS) {
             set(var, 0);
@@ -802,10 +809,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         waveTransition = true;
         getReadyRemaining = GET_READY_DURATION;
         getReadySoundQueued = true;
-        extraTime = GameVars.EXTRA_TIME_MAX;
-        extraTimeWarned = false;
+        refillWaveTimer();
         ufoSpawnedThisWave = false;
-        updateExtraTimeBar();
         showWaveAnnouncement(WaveManager.resolveWaveType(geti(GameVars.LEVEL)));
     }
 
@@ -836,11 +841,9 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         }
         cancelGetReady();
         waveTransition = false;
-        extraTime = GameVars.EXTRA_TIME_MAX;
-        extraTimeWarned = false;
+        refillWaveTimer();
         ufoSpawnedThisWave = false;
         waveManager.startWave(geti(GameVars.LEVEL));
-        updateExtraTimeBar();
     }
 
     private void showWaveAnnouncement() {
@@ -871,6 +874,14 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
                 message = "RANK - WAVE " + geti(GameVars.LEVEL);
                 color = Color.HOTPINK;
             }
+            case PEARL -> {
+                message = "ATTACK - WAVE " + geti(GameVars.LEVEL);
+                color = Color.AQUA;
+            }
+            case MONSTER -> {
+                message = "SWARM - WAVE " + geti(GameVars.LEVEL);
+                color = Color.MEDIUMPURPLE;
+            }
             default -> {
                 message = "WAVE " + geti(GameVars.LEVEL);
                 color = Color.YELLOW;
@@ -883,6 +894,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     private void playWaveIntroSound(WaveManager.WaveType waveType) {
         if (waveType == WaveManager.WaveType.BONUS) {
             SoundHelper.play("bonus_round.wav");
+        } else if (waveType == WaveManager.WaveType.RANK) {
+            SoundHelper.play("rank_wave.wav");
         } else {
             SoundHelper.play("get_ready.wav");
         }
@@ -999,6 +1012,20 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             spawnPlayerShot(centerX - 8, topY, -6);
             spawnPlayerShot(centerX, topY, 6);
             spawnPlayerShot(centerX + 6, topY, 20);
+        }
+        fireDockedEscorts();
+    }
+
+    private void fireDockedEscorts() {
+        for (Entity escort : List.copyOf(getGameWorld().getEntitiesByType(EntityType.ENEMY))) {
+            if (!escort.isActive() || !escort.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            EnemyComponent ec = escort.getComponent(EnemyComponent.class);
+            if (!ec.isDocked()) {
+                continue;
+            }
+            spawnPlayerShot(escort.getX() + escort.getWidth() / 2.0 - 4, escort.getY() - 14, 0);
         }
     }
 
@@ -1211,6 +1238,13 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
                     spawnAngledEnemyShot(x, y);
                 }
             }
+            case MONSTER -> {
+                String[] kinds = {"blob", "drip", "flame"};
+                String kind = kinds[Math.abs(random.nextInt(kinds.length))];
+                double drift = (random.nextDouble() - 0.5) * 70;
+                spawnEnemyBullet(x, y, drift, 150 + random.nextDouble() * 40, false, kind);
+                SoundHelper.play("enemy_shot.wav");
+            }
             case UFO -> {
                 spawnEnemyBullet(x, y, 0, 165, true);
                 SoundHelper.play("missile_launch.wav");
@@ -1249,10 +1283,44 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
 
     private void spawnEnemyBullet(double x, double y, double speedX, double speedY, boolean homing) {
+        spawnEnemyBullet(x, y, speedX, speedY, homing, "bolt");
+    }
+
+    private void spawnEnemyBullet(double x, double y, double speedX, double speedY, boolean homing, String kind) {
         spawn("enemyBullet", new com.almasb.fxgl.entity.SpawnData(x - 5, y)
                 .put("speedX", speedX)
                 .put("speedY", speedY)
-                .put("homing", homing));
+                .put("homing", homing)
+                .put("kind", kind));
+    }
+
+    public void splitMonster(Entity parent, EnemyComponent parentEc) {
+        if (parent == null || !parent.isActive() || parentEc == null) {
+            return;
+        }
+        double cx = parent.getX() + parent.getWidth() / 2.0;
+        double cy = parent.getY() + parent.getHeight() / 2.0;
+        int squadId = parentEc.getSquadId();
+        int sprite = parentEc.getSpriteIndex();
+        int level = geti(GameVars.LEVEL);
+        parent.removeFromWorld();
+        inc(GameVars.ENEMIES_REMAINING, 1);
+        spawnMonsterChild(cx - 22, cy + 8, -40, squadId, sprite, level);
+        spawnMonsterChild(cx + 6, cy + 8, 40, squadId, sprite, level);
+        SoundHelper.play("scoop.wav");
+    }
+
+    private void spawnMonsterChild(double x, double y, double diveOffset, int squadId, int sprite, int level) {
+        Entity child = spawn("enemy", new com.almasb.fxgl.entity.SpawnData(x, y)
+                .put("enemyType", EnemyComponent.EnemyType.MONSTER)
+                .put("level", level)
+                .put("spriteIndex", sprite)
+                .put("canSplit", false)
+                .put("diveNow", true)
+                .put("diveTargetX", x + diveOffset)
+                .put("squadId", squadId));
+        child.setScaleX(0.62);
+        child.setScaleY(0.62);
     }
     
     public void onSquadMemberSettled(int squadId) {
@@ -1269,10 +1337,12 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     @Override
     protected void initPhysics() {
         onCollisionBegin(EntityType.PLAYER_BULLET, EntityType.ENEMY, (bullet, enemy) -> {
+            EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
+            if (ec.isScooped()) {
+                return;
+            }
             bullet.getComponent(BulletComponent.class).onHit();
             bullet.removeFromWorld();
-            
-            EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
             ec.hit();
 
             double hitX = bullet.getX() + bullet.getWidth() / 2;
@@ -1290,52 +1360,42 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             }
             
             if (ec.isDead()) {
-                inc(GameVars.SCORE, ec.getScoreValue());
-                inc(GameVars.ENEMIES_REMAINING, -1);
-                
-                waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
-
-                double deathX = enemy.getX() + enemy.getWidth() / 2;
-                double deathY = enemy.getY() + enemy.getHeight() / 2;
-                
-                boolean isBoss = ec.isBoss();
-                
-                if (isBoss) {
-                    spawnBossDeathSequence(deathX, deathY);
-                    spawnBossCoins(deathX, deathY);
-                    trySpawnRankMarker(deathX, deathY, ec.getType());
-                } else {
-                    String explosionSize = (ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
-                    spawnExplosion(deathX, deathY, explosionSize);
-                    SoundHelper.play("explode_ship.wav");
-                    trySpawnPickup(deathX, deathY, ec.getType());
-                    trySpawnRankMarker(deathX, deathY, ec.getType());
-                }
-
-                enemy.removeFromWorld();
-                waveManager.checkKillBonuses();
-                checkWaveComplete();
+                finishEnemyKill(enemy, ec);
             }
         });
-        
+
+        onCollisionBegin(EntityType.ENEMY_BULLET, EntityType.ENEMY, (bullet, enemy) -> {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                return;
+            }
+            if (!enemy.getComponent(EnemyComponent.class).isDocked()) {
+                return;
+            }
+            bullet.removeFromWorld();
+            hitScoopFormation();
+        });
+
         onCollisionBegin(EntityType.ENEMY_BULLET, EntityType.PLAYER, (bullet, playerEntity) -> {
             bullet.removeFromWorld();
-            
-            PlayerComponent pc = playerEntity.getComponent(PlayerComponent.class);
-            if (!pc.isInvulnerable()) {
-                playerHit(pc);
-            }
+            hitScoopFormation();
         });
         
         onCollisionBegin(EntityType.ENEMY, EntityType.PLAYER, (enemy, playerEntity) -> {
+            if (!enemy.isActive()) {
+                return;
+            }
             EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
+            if (ec.isScooped()) {
+                return;
+            }
+            if (playerScoopCharges() > 0 && scoopSlotsUsed() < GameVars.SCOOP_COUNT && ec.beginScoop(nextDockSlot())) {
+                SoundHelper.play("scoop.wav");
+                return;
+            }
             if (ec.isHarmlessOnContact()) {
                 return;
             }
-            PlayerComponent pc = playerEntity.getComponent(PlayerComponent.class);
-            if (!pc.isInvulnerable()) {
-                playerHit(pc);
-            }
+            hitScoopFormation();
         });
         
         onCollisionBegin(EntityType.PICKUP, EntityType.PLAYER, (pickup, playerEntity) -> {
@@ -1367,6 +1427,10 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         if (minigameActive || warping) {
             return;
         }
+        if (destroyScoopedBySlot(0) || destroyScoopedBySlot(1)) {
+            scoopHitLock = 0.35;
+            return;
+        }
         inc(GameVars.LIVES, -1);
         pc.makeInvulnerable();
         
@@ -1382,6 +1446,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         if (geti(GameVars.WEAPON_GRADE) > 1) {
             inc(GameVars.WEAPON_GRADE, -1);
         }
+
+        changeLevelTime(-GameVars.LEVEL_TIME_DEATH_PENALTY);
         
         if (geti(GameVars.LIVES) <= 0) {
             triggerGameOver();
@@ -1425,6 +1491,18 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             return;
         }
         roll -= GameVars.TIME_PICKUP_DROP_CHANCE;
+
+        if (roll < GameVars.SHIELD_DROP_CHANCE) {
+            spawn("shieldPickup", x - 14, y - 14);
+            return;
+        }
+        roll -= GameVars.SHIELD_DROP_CHANCE;
+
+        if (scoopDropAllowed() && playerScoopCharges() < GameVars.SCOOP_COUNT && roll < GameVars.SCOOP_DROP_CHANCE) {
+            spawn("scoopPickup", x - 14, y - 14);
+            return;
+        }
+        roll -= GameVars.SCOOP_DROP_CHANCE;
 
         if (roll < GameVars.PICKUP_DROP_CHANCE) {
             String pickupType = random.nextBoolean() ? "weaponPickup" : "ammoPickup";
@@ -1596,11 +1674,25 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
                 startMinigame(new CognitiveTestGame());
             }
             case EXTRA_TIME -> {
-                extraTime = Math.min(GameVars.EXTRA_TIME_MAX, extraTime + GameVars.EXTRA_TIME_REFILL);
+                changeLevelTime(GameVars.LEVEL_TIME_PICKUP);
                 inc(GameVars.SCORE, 25);
-                showBanner("TIME", Color.LIMEGREEN, 1.1);
+                showBanner("TIME +" + GameVars.LEVEL_TIME_PICKUP, Color.LIMEGREEN, 1.1);
                 SoundHelper.play("extra_time.wav");
-                updateExtraTimeBar();
+            }
+            case SHIELD -> {
+                if (player != null && player.hasComponent(PlayerComponent.class)) {
+                    player.getComponent(PlayerComponent.class).addShield(GameVars.SHIELD_DURATION);
+                }
+                inc(GameVars.SCORE, 25);
+                showBanner("SHIELD +" + (int) GameVars.SHIELD_DURATION, Color.AQUA, 1.1);
+                SoundHelper.play("shield.wav");
+                updateShieldHud();
+            }
+            case SCOOP -> {
+                attachScoops();
+                inc(GameVars.SCORE, 25);
+                showBanner("SCOOP", Color.LIMEGREEN, 1.1);
+                SoundHelper.play("scoop.wav");
             }
             default -> {}
         }
@@ -1653,23 +1745,37 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
     
     private void checkWaveComplete() {
-        if (minigameActive || warping || gameOver) {
+        if (minigameActive || warping || gameOver || waveManager == null || waveTransition) {
             return;
         }
-        if (waveManager.isWaveComplete() && !waveTransition) {
-            waveTransition = true;
-            if (waveManager.getCurrentWaveType() == WaveManager.WaveType.KAMIKAZE) {
-                startWarp();
+        if (waveManager.hasPendingSpawns() || hasLiveCombatEnemies()) {
+            return;
+        }
+        waveTransition = true;
+        set(GameVars.ENEMIES_REMAINING, 0);
+        if (waveManager.getCurrentWaveType() == WaveManager.WaveType.KAMIKAZE) {
+            startWarp();
+            return;
+        }
+        double pause = waveManager.getCurrentWaveType() == WaveManager.WaveType.BONUS ? 2.1 : 1.2;
+        runOnce(() -> {
+            if (gameOver || showingTitleScreen) {
                 return;
             }
-            double pause = waveManager.getCurrentWaveType() == WaveManager.WaveType.BONUS ? 2.1 : 1.2;
-            runOnce(() -> {
-                if (gameOver || showingTitleScreen) {
-                    return;
-                }
-                continueToNextWave();
-            }, Duration.seconds(pause));
+            continueToNextWave();
+        }, Duration.seconds(pause));
+    }
+
+    private boolean hasLiveCombatEnemies() {
+        for (Entity enemy : getGameWorld().getEntitiesByType(EntityType.ENEMY)) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            if (!enemy.getComponent(EnemyComponent.class).isScooped()) {
+                return true;
+            }
         }
+        return false;
     }
     
     public boolean isCombatStopped() {
@@ -1681,6 +1787,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             return;
         }
         gameOver = true;
+        clearScoops();
         cancelGetReady();
         if (waveManager != null) {
             waveManager.stop();
@@ -1878,15 +1985,76 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             }
             cancelGetReady();
             clearWaveEntities();
-            extraTime = GameVars.EXTRA_TIME_MAX;
-            extraTimeWarned = false;
+            refillWaveTimer();
             ufoSpawnedThisWave = false;
             waveTransition = false;
             waveManager.startWave(geti(GameVars.LEVEL), WaveManager.WaveType.BONUS);
-            updateExtraTimeBar();
             showWaveAnnouncement();
             SoundHelper.play("bonus_round.wav");
             showBanner(drop.banner(), Color.GOLD, 1.2);
+            return;
+        }
+        if ("SCOOP".equals(drop.spawnName())) {
+            if (gameOver || optionsOpen || minigameActive || warping) {
+                return;
+            }
+            if (!gameStarted || showingTitleScreen || player == null) {
+                if (showingTitleScreen) {
+                    startActualGame(false);
+                }
+                if (player == null) {
+                    return;
+                }
+            }
+            attachScoops();
+            showBanner(drop.banner(), Color.LIMEGREEN, 1.1);
+            SoundHelper.play("scoop.wav");
+            return;
+        }
+        if ("MONSTER".equals(drop.spawnName())) {
+            if (gameOver || optionsOpen || minigameActive || warping) {
+                return;
+            }
+            if (!gameStarted || showingTitleScreen || player == null) {
+                if (showingTitleScreen) {
+                    startActualGame(false);
+                }
+                if (player == null) {
+                    return;
+                }
+            }
+            cancelGetReady();
+            clearWaveEntities();
+            refillWaveTimer();
+            ufoSpawnedThisWave = false;
+            waveTransition = false;
+            waveManager.startWave(Math.max(geti(GameVars.LEVEL), GameVars.MONSTER_SPLIT_MIN_LEVEL), WaveManager.WaveType.MONSTER);
+            showWaveAnnouncement();
+            SoundHelper.play("get_ready.wav");
+            showBanner(drop.banner(), Color.MEDIUMPURPLE, 1.2);
+            return;
+        }
+        if ("PEARL".equals(drop.spawnName())) {
+            if (gameOver || optionsOpen || minigameActive || warping) {
+                return;
+            }
+            if (!gameStarted || showingTitleScreen || player == null) {
+                if (showingTitleScreen) {
+                    startActualGame(false);
+                }
+                if (player == null) {
+                    return;
+                }
+            }
+            cancelGetReady();
+            clearWaveEntities();
+            refillWaveTimer();
+            ufoSpawnedThisWave = false;
+            waveTransition = false;
+            waveManager.startWave(geti(GameVars.LEVEL), WaveManager.WaveType.PEARL);
+            showWaveAnnouncement();
+            SoundHelper.play("get_ready.wav");
+            showBanner(drop.banner(), Color.AQUA, 1.2);
             return;
         }
         if (gameOver || optionsOpen || minigameActive || warping) {
@@ -1978,6 +2146,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         waveTransition = true;
         cancelGetReady();
         warpElapsed = 0;
+        clearScoops();
         clearWaveEntities();
         showBanner("WARP", Color.CYAN, 2.2);
         MusicHelper.stop();
@@ -2020,8 +2189,219 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         if (gameOver || showingTitleScreen) {
             return;
         }
+        clearScoops();
+        clearWaveEntities();
         inc(GameVars.LEVEL, 1);
         startGetReady();
+    }
+
+    private boolean scoopDropAllowed() {
+        if (waveManager == null) {
+            return false;
+        }
+        return switch (waveManager.getCurrentWaveType()) {
+            case FIGHTERS, MIXED, PEARL, RANK, BONUS, KAMIKAZE, MONSTER -> true;
+            default -> false;
+        };
+    }
+
+    private int playerScoopCharges() {
+        if (player == null || !player.isActive() || !player.hasComponent(PlayerComponent.class)) {
+            return 0;
+        }
+        return player.getComponent(PlayerComponent.class).getScoopCharges();
+    }
+
+    private void attachScoops() {
+        if (player == null || !player.isActive() || !player.hasComponent(PlayerComponent.class)) {
+            return;
+        }
+        player.getComponent(PlayerComponent.class).attachScoops();
+        updateScoopCatch();
+    }
+
+    private void updateScoopCatch() {
+        if (player == null || !player.isActive() || playerScoopCharges() <= 0 || scoopSlotsUsed() >= GameVars.SCOOP_COUNT) {
+            return;
+        }
+        double padX = 28;
+        double padTop = 36;
+        double padBottom = 12;
+        double x1 = player.getX() - padX;
+        double y1 = player.getY() - padTop;
+        double x2 = player.getX() + player.getWidth() + padX;
+        double y2 = player.getY() + player.getHeight() + padBottom;
+        for (Entity enemy : List.copyOf(getGameWorld().getEntitiesByType(EntityType.ENEMY))) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
+            if (ec.isBoss() || ec.isScooped()) {
+                continue;
+            }
+            if (scoopSlotsUsed() >= GameVars.SCOOP_COUNT) {
+                return;
+            }
+            double ex2 = enemy.getX() + enemy.getWidth();
+            double ey2 = enemy.getY() + enemy.getHeight();
+            if (enemy.getX() < x2 && ex2 > x1 && enemy.getY() < y2 && ey2 > y1) {
+                if (ec.beginScoop(nextDockSlot())) {
+                    SoundHelper.play("scoop.wav");
+                }
+            }
+        }
+    }
+
+    private int scoopSlotsUsed() {
+        int used = 0;
+        for (Entity enemy : getGameWorld().getEntitiesByType(EntityType.ENEMY)) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            if (enemy.getComponent(EnemyComponent.class).isScooped()) {
+                used++;
+            }
+        }
+        return used;
+    }
+
+    private int nextDockSlot() {
+        boolean left = false;
+        boolean right = false;
+        for (Entity enemy : getGameWorld().getEntitiesByType(EntityType.ENEMY)) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
+            if (!ec.isScooped()) {
+                continue;
+            }
+            if (ec.getDockSlot() == 0) {
+                left = true;
+            } else if (ec.getDockSlot() == 1) {
+                right = true;
+            }
+        }
+        if (!left) {
+            return 0;
+        }
+        if (!right) {
+            return 1;
+        }
+        return -1;
+    }
+
+    private void clearScoops() {
+        for (Entity enemy : List.copyOf(getGameWorld().getEntitiesByType(EntityType.ENEMY))) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            if (enemy.getComponent(EnemyComponent.class).isScooped()) {
+                enemy.removeFromWorld();
+            }
+        }
+        if (player != null && player.hasComponent(PlayerComponent.class)) {
+            player.getComponent(PlayerComponent.class).clearScoops();
+        }
+    }
+
+    public void completeScoop(Entity enemy, EnemyComponent ec) {
+        if (enemy == null || !enemy.isActive() || ec == null) {
+            return;
+        }
+        if (ec.getDockSlot() < 0) {
+            finishEnemyKill(enemy, ec, true);
+            return;
+        }
+        inc(GameVars.SCORE, ec.getScoreValue());
+        inc(GameVars.ENEMIES_REMAINING, -1);
+        waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
+        ec.dock();
+        waveManager.checkKillBonuses();
+        checkWaveComplete();
+    }
+
+    private boolean hasScoopEscorts() {
+        for (Entity enemy : getGameWorld().getEntitiesByType(EntityType.ENEMY)) {
+            if (enemy.isActive() && enemy.hasComponent(EnemyComponent.class)
+                    && enemy.getComponent(EnemyComponent.class).isScooped()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void hitScoopFormation() {
+        if (scoopHitLock > 0 || minigameActive || warping) {
+            return;
+        }
+        if (player != null && player.isActive() && player.hasComponent(PlayerComponent.class)
+                && player.getComponent(PlayerComponent.class).isInvulnerable()) {
+            return;
+        }
+        if (destroyScoopedBySlot(0) || destroyScoopedBySlot(1)) {
+            scoopHitLock = 0.35;
+            return;
+        }
+        if (player == null || !player.isActive() || !player.hasComponent(PlayerComponent.class)) {
+            return;
+        }
+        playerHit(player.getComponent(PlayerComponent.class));
+    }
+
+    private boolean destroyScoopedBySlot(int slot) {
+        for (Entity enemy : List.copyOf(getGameWorld().getEntitiesByType(EntityType.ENEMY))) {
+            if (!enemy.isActive() || !enemy.hasComponent(EnemyComponent.class)) {
+                continue;
+            }
+            EnemyComponent ec = enemy.getComponent(EnemyComponent.class);
+            if (ec.isScooped() && ec.getDockSlot() == slot) {
+                destroyDockedEscort(enemy);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void destroyDockedEscort(Entity escort) {
+        if (escort == null || !escort.isActive()) {
+            return;
+        }
+        spawnExplosion(escort.getX() + escort.getWidth() / 2.0, escort.getY() + escort.getHeight() / 2.0, "ship");
+        SoundHelper.play("explode_ship.wav");
+        escort.removeFromWorld();
+    }
+
+    private void finishEnemyKill(Entity enemy, EnemyComponent ec) {
+        finishEnemyKill(enemy, ec, false);
+    }
+
+    private void finishEnemyKill(Entity enemy, EnemyComponent ec, boolean scooped) {
+        if (enemy == null || !enemy.isActive() || ec == null) {
+            return;
+        }
+        inc(GameVars.SCORE, ec.getScoreValue());
+        inc(GameVars.ENEMIES_REMAINING, -1);
+        waveManager.onEnemyDestroyed(ec.getSquadId(), ec.isEntering());
+
+        if (!scooped) {
+            double deathX = enemy.getX() + enemy.getWidth() / 2;
+            double deathY = enemy.getY() + enemy.getHeight() / 2;
+            if (ec.isBoss()) {
+                spawnBossDeathSequence(deathX, deathY);
+                spawnBossCoins(deathX, deathY);
+                trySpawnRankMarker(deathX, deathY, ec.getType());
+            } else {
+                String explosionSize = (ec.getType() == EnemyComponent.EnemyType.TOUGH) ? "big" : "ship";
+                spawnExplosion(deathX, deathY, explosionSize);
+                SoundHelper.play("explode_ship.wav");
+                trySpawnPickup(deathX, deathY, ec.getType());
+                trySpawnRankMarker(deathX, deathY, ec.getType());
+            }
+        }
+        enemy.removeFromWorld();
+        waveManager.checkKillBonuses();
+        checkWaveComplete();
     }
 
     private void ensureWarpFlash() {
@@ -2145,6 +2525,7 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     
     @Override
     protected void onUpdate(double tpf) {
+        updateShieldHud();
         if (showingTitleScreen || gameOver || optionsOpen || player == null) return;
         
         frameCount++;
@@ -2191,12 +2572,17 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             pc.moveRight(tpf);
         }
         pc.updateIdle();
+        if (scoopHitLock > 0) {
+            scoopHitLock = Math.max(0, scoopHitLock - tpf);
+        }
+        updateScoopCatch();
 
         updateGetReady(tpf);
         
         if (waveManager != null && !waveTransition) {
             waveManager.update(tpf);
             updateExtraTime(tpf);
+            checkWaveComplete();
         }
     }
 
@@ -2223,7 +2609,11 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     }
 
     private void spawnHurryUpUfo() {
-        if (ufoSpawnedThisWave || gameOver || showingTitleScreen || warping || minigameActive) {
+        if (ufoSpawnedThisWave || gameOver || showingTitleScreen || warping || minigameActive || waveTransition) {
+            return;
+        }
+        if (getReadyRemaining > 0 || !hasLiveCombatEnemies()) {
+            checkWaveComplete();
             return;
         }
         ufoSpawnedThisWave = true;
@@ -2244,11 +2634,13 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     private Rectangle weaponBar;
     private Rectangle livesBar;
     private Rectangle extraTimeBar;
+    private Text extraTimeMaxText;
     private double extraTimeBarMaxWidth;
     private Circle[] rankDots = new Circle[GameVars.RANK_COLOR_COUNT];
     private Text rankTitleText;
     private Rectangle autoLamp;
     private Text autoLampText;
+    private Text shieldHudText;
     private Rectangle comboPlate;
     
     private static final Color[] LETTER_COLORS = {
@@ -2263,8 +2655,8 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
     protected void initUI() {
         int railWidth = GameVars.RAIL_WIDTH;
         int xOffset = 4;
-        int extraY = 44;
-        int letterSpacing = 36;
+        int extraY = 36;
+        int letterSpacing = 32;
         
         for (int i = 0; i < 5; i++) {
             char letter = GameVars.EXTRA_LETTERS[i];
@@ -2279,10 +2671,10 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
             getGameScene().addUINode(letterGroup);
         }
         
-        int barsY = extraY + 5 * letterSpacing + 18;
+        int barsY = extraY + 5 * letterSpacing + 14;
         int barWidth = railWidth - 26;
-        int barHeight = 8;
-        int barSpacing = 28;
+        int barHeight = 7;
+        int barSpacing = 20;
         int labelOffset = 14;
         
         Text ammoLabelB = new Text("B");
@@ -2314,31 +2706,40 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         getGameScene().addUINode(livesBarBg);
         getGameScene().addUINode(livesBar);
 
+        int timeBlockY = barsY + barSpacing * 3;
         Text timeLabelT = new Text("T");
         timeLabelT.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
         timeLabelT.setFill(Color.LIMEGREEN);
         timeLabelT.setTranslateX(xOffset);
-        timeLabelT.setTranslateY(barsY + barSpacing * 3 + barHeight);
+        timeLabelT.setTranslateY(timeBlockY + 10);
         getGameScene().addUINode(timeLabelT);
 
-        Rectangle timeBarBg = createBarBackground(xOffset + labelOffset, barsY + barSpacing * 3, barWidth, barHeight);
-        extraTimeBar = createStatusBar(xOffset + labelOffset + 1, barsY + barSpacing * 3 + 1, barWidth - 2, barHeight - 2, Color.LIME);
-        extraTimeBarMaxWidth = barWidth - 2;
+        extraTimeMaxText = new Text(String.valueOf(extraTimeMax));
+        extraTimeMaxText.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        extraTimeMaxText.setFill(Color.LIMEGREEN);
+        extraTimeMaxText.setTranslateX(xOffset + labelOffset);
+        extraTimeMaxText.setTranslateY(timeBlockY + 10);
+        extraTimeMaxText.setEffect(new DropShadow(2, Color.BLACK));
+        getGameScene().addUINode(extraTimeMaxText);
+
+        Rectangle timeBarBg = createBarBackground(xOffset, timeBlockY + 13, railWidth - 10, barHeight);
+        extraTimeBar = createStatusBar(xOffset + 1, timeBlockY + 14, railWidth - 12, barHeight - 2, Color.LIME);
+        extraTimeBarMaxWidth = railWidth - 12;
         getGameScene().addUINode(timeBarBg);
         getGameScene().addUINode(extraTimeBar);
 
-        int rankY = barsY + barSpacing * 4 + 18;
-        double dotRadius = 5.2;
-        double dotGapX = 17;
-        double dotGapY = 16;
-        double dotStartX = xOffset + 11;
+        int rankY = timeBlockY + 34;
+        double dotRadius = 4.4;
+        double dotGapX = 16;
+        double dotGapY = 13;
+        double dotStartX = xOffset + 10;
         for (int i = 0; i < GameVars.RANK_COLOR_COUNT; i++) {
             int col = i % 3;
             int row = i / 3;
             Circle dot = new Circle(dotRadius);
             dot.setCenterX(dotStartX + col * dotGapX);
             dot.setCenterY(rankY + row * dotGapY);
-            dot.setStrokeWidth(2.1);
+            dot.setStrokeWidth(1.8);
             rankDots[i] = dot;
             styleRankDot(dot, i, false);
             getGameScene().addUINode(dot);
@@ -2348,12 +2749,29 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         rankTitleText.setFill(Color.GOLD);
         rankTitleText.setWrappingWidth(railWidth - 8);
         rankTitleText.setTranslateX(xOffset);
-        rankTitleText.setTranslateY(rankY + dotGapY + 16);
+        rankTitleText.setTranslateY(rankY + dotGapY + 14);
         getGameScene().addUINode(rankTitleText);
         updateRankHud();
+
+        int shieldY = rankY + 44;
+        Text shieldLabel = new Text("S");
+        shieldLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        shieldLabel.setFill(Color.AQUA);
+        shieldLabel.setTranslateX(xOffset);
+        shieldLabel.setTranslateY(shieldY);
+        getGameScene().addUINode(shieldLabel);
+
+        shieldHudText = new Text("0");
+        shieldHudText.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
+        shieldHudText.setFill(Color.rgb(60, 80, 90));
+        shieldHudText.setTranslateX(xOffset + 14);
+        shieldHudText.setTranslateY(shieldY);
+        shieldHudText.setEffect(new DropShadow(2, Color.BLACK));
+        getGameScene().addUINode(shieldHudText);
+        updateShieldHud();
         
-        int autoY = rankY + 52;
-        autoLamp = new Rectangle(12, 12);
+        int autoY = shieldY + 20;
+        autoLamp = new Rectangle(10, 10);
         autoLamp.setFill(Color.rgb(40, 40, 40));
         autoLamp.setStroke(Color.rgb(80, 80, 80));
         autoLamp.setStrokeWidth(1);
@@ -2364,13 +2782,13 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         getGameScene().addUINode(autoLamp);
         
         autoLampText = new Text("AUTO");
-        autoLampText.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+        autoLampText.setFont(Font.font("Monospace", FontWeight.BOLD, 8));
         autoLampText.setFill(Color.rgb(60, 60, 60));
-        autoLampText.setTranslateX(xOffset + 15);
-        autoLampText.setTranslateY(autoY + 10);
+        autoLampText.setTranslateX(xOffset + 13);
+        autoLampText.setTranslateY(autoY + 8);
         getGameScene().addUINode(autoLampText);
         
-        int moneyY = autoY + 36;
+        int moneyY = autoY + 28;
         Text moneyLabel = new Text();
         moneyLabel.setFont(Font.font("Monospace", FontWeight.BOLD, 11));
         moneyLabel.setFill(Color.GOLD);
@@ -2381,36 +2799,38 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         moneyLabel.setEffect(moneyShadow);
         getGameScene().addUINode(moneyLabel);
         
-        int legendY = moneyY + 24;
+        int legendY = moneyY + 20;
         Text coinCaption = new Text("COINS");
         coinCaption.setFont(Font.font("Monospace", FontWeight.BOLD, 8));
         coinCaption.setFill(Color.rgb(160, 160, 170));
         coinCaption.setTranslateX(xOffset);
         coinCaption.setTranslateY(legendY);
         getGameScene().addUINode(coinCaption);
-        legendY += 14;
-        int legendRowH = 18;
+        legendY += 16;
         Color[] legendColors = {
             Color.rgb(240, 240, 240),
             Color.rgb(100, 220, 100),
             Color.rgb(100, 150, 255),
             Color.rgb(200, 100, 255)
         };
-        int[] legendValues = {10, 50, 100, 1000};
+        int[] legendValues = {10, 50, 100, 200};
         for (int i = 0; i < 4; i++) {
-            Circle dot = new Circle(4);
+            int col = i % 2;
+            int row = i / 2;
+            double cx = xOffset + 4 + col * 30;
+            double cy = legendY + row * 16;
+            Circle dot = new Circle(3.4);
             dot.setFill(legendColors[i]);
-            dot.setCenterX(xOffset + 4);
-            dot.setCenterY(legendY + i * legendRowH);
+            dot.setCenterX(cx);
+            dot.setCenterY(cy);
             getGameScene().addUINode(dot);
             
             Text valueText = new Text("$" + legendValues[i]);
-            valueText.setFont(Font.font("Monospace", FontWeight.BOLD, 9));
+            valueText.setFont(Font.font("Monospace", FontWeight.BOLD, 8));
             valueText.setFill(Color.GOLD);
-            valueText.setTranslateX(xOffset + 12);
-            valueText.setTranslateY(legendY + i * legendRowH + 3);
-            DropShadow legendShadow = new DropShadow(1, Color.BLACK);
-            valueText.setEffect(legendShadow);
+            valueText.setTranslateX(cx + 6);
+            valueText.setTranslateY(cy + 3);
+            valueText.setEffect(new DropShadow(1, Color.BLACK));
             getGameScene().addUINode(valueText);
         }
         
@@ -2652,11 +3072,32 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         updateExtraTimeBar();
     }
 
+    private void refillWaveTimer() {
+        extraTime = extraTimeMax;
+        extraTimeWarned = false;
+        updateExtraTimeBar();
+    }
+
+    private void changeLevelTime(int delta) {
+        if (delta > 0) {
+            extraTimeMax += delta;
+            extraTime += delta;
+        } else if (delta < 0) {
+            extraTimeMax = Math.max(GameVars.LEVEL_TIME_MIN, extraTimeMax + delta);
+            extraTime = Math.max(0, extraTime + delta);
+            extraTimeWarned = extraTime <= 5;
+        }
+        updateExtraTimeBar();
+    }
+
     private void updateExtraTimeBar() {
+        if (extraTimeMaxText != null) {
+            extraTimeMaxText.setText(String.valueOf(extraTimeMax));
+        }
         if (extraTimeBar == null) {
             return;
         }
-        double ratio = GameVars.EXTRA_TIME_MAX > 0 ? extraTime / GameVars.EXTRA_TIME_MAX : 0;
+        double ratio = extraTimeMax > 0 ? extraTime / extraTimeMax : 0;
         extraTimeBar.setWidth(Math.max(1, extraTimeBarMaxWidth * ratio));
         if (extraTime > 0 && extraTime <= 5) {
             extraTimeBar.setOpacity(0.35 + 0.65 * (0.5 + 0.5 * Math.sin(extraTimePulse * 14)));
@@ -2704,6 +3145,28 @@ public class DeltaBladeApp extends GameApplication implements MinigameHost {
         dot.setOpacity(1);
     }
     
+    private void updateShieldHud() {
+        if (shieldHudText == null) {
+            return;
+        }
+        double remaining = 0;
+        if (player != null && player.isActive() && player.hasComponent(PlayerComponent.class)) {
+            remaining = player.getComponent(PlayerComponent.class).getShieldRemaining();
+        }
+        int shown = (int) Math.ceil(remaining);
+        shieldHudText.setText(String.valueOf(shown));
+        if (shown <= 0) {
+            shieldHudText.setFill(Color.rgb(60, 80, 90));
+            shieldHudText.setOpacity(0.55);
+        } else if (remaining <= 3) {
+            shieldHudText.setFill(Color.ORANGERED);
+            shieldHudText.setOpacity(0.4 + 0.6 * (0.5 + 0.5 * Math.sin(remaining * 14)));
+        } else {
+            shieldHudText.setFill(Color.AQUA);
+            shieldHudText.setOpacity(1);
+        }
+    }
+
     private void updateAutoLamp() {
         boolean autoOn = getb(GameVars.AUTOFIRE);
         if (autoLamp != null) {

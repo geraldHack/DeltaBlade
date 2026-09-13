@@ -1,11 +1,14 @@
 <?php
 /**
- * DeltaBlade global top-10. Upload this file and scores.json to
- * https://spoteroxe.de/deltablade/ and make scores.json writable (0666).
- * Concurrent writes are serialized with flock(LOCK_EX).
+ * DeltaBlade global scoreboard.
+ * Game clients GET without query params and still receive the top 10.
+ * The website uses ?page=&limit= for the full list.
  */
 const SCOREBOARD_SECRET = 'DeltaBlade-spoteroxe-hs-7c4e91b2';
-const MAX_ENTRIES = 10;
+const GAME_TOP = 10;
+const STORE_MAX = 250;
+const PAGE_DEFAULT = 20;
+const PAGE_MAX = 50;
 const MAX_SCORE = 99999999;
 const MAX_WAVE = 9999;
 define('DATA_FILE', is_dir('/home/gehack/deltablade-data')
@@ -14,6 +17,7 @@ define('DATA_FILE', is_dir('/home/gehack/deltablade-data')
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store');
 
 function fail(int $code, string $msg): void
 {
@@ -49,7 +53,7 @@ function read_entries($fh): array
     return $data['entries'];
 }
 
-function normalize_entries(array $entries): array
+function normalize_entries(array $entries, int $limit = STORE_MAX): array
 {
     $clean = [];
     foreach ($entries as $row) {
@@ -72,7 +76,17 @@ function normalize_entries(array $entries): array
         }
         return $b['wave'] <=> $a['wave'];
     });
-    return array_slice($clean, 0, MAX_ENTRIES);
+    return array_slice($clean, 0, max(1, $limit));
+}
+
+function find_rank(array $entries, string $name, int $score, int $wave): int
+{
+    foreach ($entries as $i => $row) {
+        if ($row['name'] === $name && $row['score'] === $score && $row['wave'] === $wave) {
+            return $i;
+        }
+    }
+    return -1;
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -83,10 +97,31 @@ if ($method === 'GET') {
         fail(500, 'store');
     }
     flock($fh, LOCK_SH);
-    $entries = normalize_entries(read_entries($fh));
+    $all = normalize_entries(read_entries($fh), STORE_MAX);
     flock($fh, LOCK_UN);
     fclose($fh);
-    echo json_encode(['entries' => $entries]);
+
+    if (isset($_GET['page']) || isset($_GET['limit'])) {
+        $limit = intval($_GET['limit'] ?? PAGE_DEFAULT);
+        $limit = max(1, min(PAGE_MAX, $limit));
+        $total = count($all);
+        $pages = max(1, (int) ceil(max(1, $total) / $limit));
+        $page = max(1, intval($_GET['page'] ?? 1));
+        if ($page > $pages) {
+            $page = $pages;
+        }
+        $offset = ($page - 1) * $limit;
+        echo json_encode([
+            'entries' => array_slice($all, $offset, $limit),
+            'page' => $page,
+            'limit' => $limit,
+            'total' => $total,
+            'pages' => $pages,
+        ]);
+        exit;
+    }
+
+    echo json_encode(['entries' => array_slice($all, 0, GAME_TOP)]);
     exit;
 }
 
@@ -122,17 +157,10 @@ if (!flock($fh, LOCK_EX)) {
     fail(503, 'lock');
 }
 
-$entries = normalize_entries(read_entries($fh));
+$entries = normalize_entries(read_entries($fh), STORE_MAX);
 $entries[] = ['name' => $name, 'score' => $score, 'wave' => $wave];
-$entries = normalize_entries($entries);
-
-$rank = -1;
-foreach ($entries as $i => $row) {
-    if ($row['name'] === $name && $row['score'] === $score && $row['wave'] === $wave) {
-        $rank = $i;
-        break;
-    }
-}
+$entries = normalize_entries($entries, STORE_MAX);
+$rank = find_rank($entries, $name, $score, $wave);
 
 rewind($fh);
 ftruncate($fh, 0);
@@ -141,4 +169,8 @@ fflush($fh);
 flock($fh, LOCK_UN);
 fclose($fh);
 
-echo json_encode(['ok' => true, 'rank' => $rank, 'entries' => $entries]);
+echo json_encode([
+    'ok' => true,
+    'rank' => $rank,
+    'entries' => array_slice($entries, 0, GAME_TOP),
+]);

@@ -27,7 +27,7 @@ import static com.almasb.fxgl.dsl.FXGL.getAppHeight;
 import static com.almasb.fxgl.dsl.FXGL.getAppWidth;
 
 /**
- * Arcade-styled options panel: music on/off, volume, track picker.
+ * Arcade-styled options panel: music on/off, music/effect volume, track picker.
  */
 public final class OptionsOverlay {
 
@@ -75,6 +75,8 @@ public final class OptionsOverlay {
     private Button musicToggle;
     private VolumeBar volumeBar;
     private Text volumeValue;
+    private VolumeBar effectBar;
+    private Text effectValue;
     private Text trackName;
     private Button prevTrack;
     private Button nextTrack;
@@ -87,7 +89,7 @@ public final class OptionsOverlay {
         dimmer.setFill(Color.rgb(0, 0, 0, 0.72));
 
         double panelW = 460;
-        double panelH = 420;
+        double panelH = 500;
         double panelX = (width - panelW) / 2.0;
         double panelY = (height - panelH) / 2.0;
 
@@ -136,7 +138,23 @@ public final class OptionsOverlay {
 
         HBox volumeControls = new HBox(14, volumeBar, volumeValue);
         volumeControls.setAlignment(Pos.CENTER_LEFT);
-        VBox volumeBlock = new VBox(8, sectionLabel("Lautstärke"), volumeControls);
+        VBox volumeBlock = new VBox(8, sectionLabel("Musik"), volumeControls);
+
+        effectValue = new Text();
+        effectValue.setFont(Font.font("Monospace", FontWeight.BOLD, 16));
+        effectValue.setFill(Color.rgb(180, 240, 255));
+        effectValue.setWrappingWidth(52);
+
+        effectBar = new VolumeBar(280, 36);
+        effectBar.setValue(OptionsStore.getEffectVolume());
+        effectBar.setOnLive(this::applyEffectLive);
+        effectBar.setOnCommit(this::commitEffectVolume);
+        SoundHelper.preload("shot.wav");
+        effectValue.setText(Math.round(effectBar.getValue() * 100) + "%");
+
+        HBox effectControls = new HBox(14, effectBar, effectValue);
+        effectControls.setAlignment(Pos.CENTER_LEFT);
+        VBox effectBlock = new VBox(8, sectionLabel("Effekte"), effectControls);
 
         trackName = new Text();
         trackName.setFont(Font.font("Monospace", FontWeight.BOLD, 14));
@@ -169,13 +187,13 @@ public final class OptionsOverlay {
         back.setPrefWidth(180);
         back.setOnAction(e -> onClose.run());
 
-        VBox content = new VBox(16);
+        VBox content = new VBox(14);
         content.setAlignment(Pos.CENTER);
         content.setPadding(new Insets(24, 36, 20, 36));
         content.setPrefWidth(panelW);
         content.setTranslateX(panelX);
         content.setTranslateY(panelY);
-        content.getChildren().addAll(title, musicRow, volumeBlock, trackBlock, folderBlock, back);
+        content.getChildren().addAll(title, musicRow, volumeBlock, effectBlock, trackBlock, folderBlock, back);
 
         root.getChildren().addAll(dimmer, panel, accent, content);
         MusicHelper.rescan();
@@ -189,6 +207,17 @@ public final class OptionsOverlay {
     private void applyVolumeLive(double volume) {
         MusicHelper.setVolume(volume);
         volumeValue.setText(Math.round(volume * 100) + "%");
+    }
+
+    private void applyEffectLive(double volume) {
+        effectValue.setText(Math.round(volume * 100) + "%");
+    }
+
+    private void commitEffectVolume(double volume) {
+        effectValue.setText(Math.round(volume * 100) + "%");
+        SoundHelper.playPreview("shot.wav", volume);
+        OptionsStore.setEffectVolume(volume);
+        SoundHelper.applyMasterVolume();
     }
 
     private void toggleMusic() {

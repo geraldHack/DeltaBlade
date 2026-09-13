@@ -6,7 +6,7 @@
 
     <groupId>deltablade</groupId>
     <artifactId>deltablade</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.6</version>
     <packaging>jar</packaging>
 
     <name>DeltaBlade</name>
@@ -22,6 +22,9 @@
         <jpackage.type>APP_IMAGE</jpackage.type>
         <jpackage.icon>${project.basedir}/packaging/icons/deltablade.png</jpackage.icon>
         <inject.dmg.skip>true</inject.dmg.skip>
+        <pack.arch.skip>true</pack.arch.skip>
+        <pack.appimage.skip>true</pack.appimage.skip>
+        <prism.order>es2,sw</prism.order>
         <!-- Stabil halten: sonst erzeugt jpackage jede EXE als neues Windows-Produkt. -->
         <jpackage.win.upgrade.uuid>6D2C415E-841E-3F95-A418-FEEE40105FDA</jpackage.win.upgrade.uuid>
     </properties>
@@ -52,6 +55,11 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-media</artifactId>
             <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>javazoom</groupId>
+            <artifactId>jlayer</artifactId>
+            <version>1.0.1</version>
         </dependency>
     </dependencies>
 
@@ -147,6 +155,7 @@
                 <jpackage.type>DMG</jpackage.type>
                 <jpackage.icon>${project.basedir}/packaging/icons/deltablade.icns</jpackage.icon>
                 <inject.dmg.skip>false</inject.dmg.skip>
+                <prism.order>sw,es2</prism.order>
             </properties>
         </profile>
         <profile>
@@ -159,6 +168,7 @@
             <properties>
                 <jpackage.type>EXE</jpackage.type>
                 <jpackage.icon>${project.basedir}/packaging/icons/deltablade.ico</jpackage.icon>
+                <prism.order>d3d,sw</prism.order>
             </properties>
         </profile>
         <profile>
@@ -172,6 +182,9 @@
             <properties>
                 <jpackage.type>DEB</jpackage.type>
                 <jpackage.icon>${project.basedir}/packaging/icons/deltablade.png</jpackage.icon>
+                <pack.arch.skip>false</pack.arch.skip>
+                <pack.appimage.skip>false</pack.appimage.skip>
+                <prism.order>es2,sw</prism.order>
             </properties>
         </profile>
         <profile>
@@ -243,7 +256,7 @@
                             <icon>${jpackage.icon}</icon>
                             <removeDestination>true</removeDestination>
                             <javaOptions>
-                                <option>-Dprism.order=sw,es2</option>
+                                <option>-Dprism.order=${prism.order}</option>
                                 <option>-Dprism.metal=false</option>
                                 <option>--enable-native-access=ALL-UNNAMED</option>
                                 <option>-Xms128m</option>
@@ -280,6 +293,40 @@
                                         <argument>${project.build.directory}/dist</argument>
                                     </arguments>
                                     <classpathScope>compile</classpathScope>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>pack-arch</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <skip>${pack.arch.skip}</skip>
+                                    <executable>/bin/bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/packaging/linux/pack-arch.sh</argument>
+                                        <argument>${app.version}</argument>
+                                        <argument>${project.build.directory}/dist</argument>
+                                        <argument>${project.basedir}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>pack-appimage</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <skip>${pack.appimage.skip}</skip>
+                                    <executable>/bin/bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/packaging/linux/pack-appimage.sh</argument>
+                                        <argument>${app.version}</argument>
+                                        <argument>${project.build.directory}/dist</argument>
+                                        <argument>${project.basedir}</argument>
+                                    </arguments>
                                 </configuration>
                             </execution>
                             <execution>

@@ -15,7 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * User music folder: {@code <Music>/DeltaBlade}.
- * macOS: ~/Music, Windows: ~/Music, Linux: xdg-user-dir MUSIC (often ~/Musik).
+ * macOS/Windows: ~/Music.
+ * Linux: XDG_MUSIC_DIR, ~/.config/user-dirs.dirs, xdg-user-dir,
+ * then ~/Musik or ~/Music (German locale prefers Musik).
  */
 final class MusicLocations {
 
@@ -56,16 +58,88 @@ final class MusicLocations {
         if (os.contains("mac")) {
             return Path.of(home, "Music");
         }
-        Path xdg = xdgMusicDir();
+        Path xdg = envMusicDir();
+        if (xdg != null) {
+            return xdg;
+        }
+        xdg = userDirsMusicDir(home);
+        if (xdg != null) {
+            return xdg;
+        }
+        xdg = xdgUserDirCommand();
         if (xdg != null) {
             return xdg;
         }
         Path musik = Path.of(home, "Musik");
         Path music = Path.of(home, "Music");
-        return Files.isDirectory(musik) && !Files.isDirectory(music) ? musik : music;
+        if (Files.isDirectory(musik) && !Files.isDirectory(music)) {
+            return musik;
+        }
+        if (Files.isDirectory(music) && !Files.isDirectory(musik)) {
+            return music;
+        }
+        if (Files.isDirectory(musik)) {
+            return musik;
+        }
+        return germanLocale() ? musik : music;
     }
 
-    private static Path xdgMusicDir() {
+    private static boolean germanLocale() {
+        String lang = System.getenv("LANG");
+        if (lang != null && lang.toLowerCase(Locale.ROOT).startsWith("de")) {
+            return true;
+        }
+        return Locale.getDefault().getLanguage().equals("de");
+    }
+
+    private static Path envMusicDir() {
+        String raw = System.getenv("XDG_MUSIC_DIR");
+        return expandUserDir(raw, System.getProperty("user.home", "."));
+    }
+
+    private static Path userDirsMusicDir(String home) {
+        Path file = Path.of(home, ".config", "user-dirs.dirs");
+        if (!Files.isRegularFile(file)) {
+            return null;
+        }
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("#") || !trimmed.startsWith("XDG_MUSIC_DIR")) {
+                    continue;
+                }
+                int eq = trimmed.indexOf('=');
+                if (eq < 0) {
+                    continue;
+                }
+                return expandUserDir(trimmed.substring(eq + 1).trim(), home);
+            }
+        } catch (IOException ignored) {
+        }
+        return null;
+    }
+
+    private static Path expandUserDir(String raw, String home) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim();
+        if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.substring(1, value.length() - 1);
+        }
+        if (value.startsWith("$HOME")) {
+            value = home + value.substring("$HOME".length());
+        } else if (value.startsWith("~/")) {
+            value = home + value.substring(1);
+        }
+        value = value.trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        return Path.of(value);
+    }
+
+    private static Path xdgUserDirCommand() {
         try {
             Process process = new ProcessBuilder("xdg-user-dir", "MUSIC")
                     .redirectError(ProcessBuilder.Redirect.DISCARD)

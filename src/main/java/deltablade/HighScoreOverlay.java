@@ -37,6 +37,7 @@ public final class HighScoreOverlay {
     private static final char EMPTY = '\0';
     private static final char SPACE = ' ';
     private static final double ROTATE_SECONDS = 3.5;
+    private static final double SPACE_LOCK_SECONDS = 3.0;
 
     @FunctionalInterface
     public interface SavedHandler {
@@ -75,9 +76,11 @@ public final class HighScoreOverlay {
     private Text[] letterTexts;
     private Timeline blink;
     private Timeline rotate;
+    private Timeline spaceArm;
     private boolean blinkOn = true;
     private boolean finished;
     private boolean confirmArmed;
+    private boolean spaceArmed;
     private boolean showingGlobal;
     private List<HighScoreStore.Entry> localEntries = List.of();
     private List<HighScoreStore.Entry> globalEntries;
@@ -159,11 +162,13 @@ public final class HighScoreOverlay {
             startBlink();
             Timeline arm = new Timeline(new KeyFrame(Duration.millis(350), e -> confirmArmed = true));
             arm.play();
+            startSpaceLock();
         } else {
             headingText = heading(currentTableTitle());
             content.getChildren().add(headingText);
             content.getChildren().add(buildTable());
             startRotate();
+            startSpaceLock();
             if (onClose != null) {
                 Button back = styledButton(closeLabel != null ? closeLabel : "ZURÜCK");
                 back.setPrefWidth(180);
@@ -229,6 +234,9 @@ public final class HighScoreOverlay {
                 return true;
             }
             if (code == KeyCode.SPACE) {
+                if (!spaceArmed) {
+                    return true;
+                }
                 letters[cursor] = SPACE;
                 if (cursor < HighScoreStore.NAME_LENGTH - 1) {
                     cursor++;
@@ -259,6 +267,9 @@ public final class HighScoreOverlay {
             }
             return true;
         }
+        if (code == KeyCode.SPACE && !spaceArmed) {
+            return true;
+        }
         if (onClose != null && (code == KeyCode.ESCAPE || code == KeyCode.ENTER)) {
             close();
             return true;
@@ -275,6 +286,16 @@ public final class HighScoreOverlay {
             rotate.stop();
             rotate = null;
         }
+        if (spaceArm != null) {
+            spaceArm.stop();
+            spaceArm = null;
+        }
+    }
+
+    private void startSpaceLock() {
+        spaceArmed = false;
+        spaceArm = new Timeline(new KeyFrame(Duration.seconds(SPACE_LOCK_SECONDS), e -> spaceArmed = true));
+        spaceArm.play();
     }
 
     public void setGlobalEntries(List<HighScoreStore.Entry> entries) {

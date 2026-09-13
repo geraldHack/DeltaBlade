@@ -12,7 +12,9 @@ public class PickupComponent extends Component {
         AUTOFIRE,
         METEOR,
         COGNITIVE,
-        EXTRA_TIME
+        EXTRA_TIME,
+        SHIELD,
+        SCOOP
     }
     
     private PickupType type;

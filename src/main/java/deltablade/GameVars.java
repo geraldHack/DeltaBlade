@@ -32,6 +32,8 @@ public final class GameVars {
     public static final double FORMATION_MAX_Y_RATIO = 0.38;
     /** FAST/TOUGH fire straight until this wave so the first pack stays readable. */
     public static final int ANGLED_FIRE_MIN_LEVEL = 5;
+    public static final int MONSTER_WAVE_MIN_LEVEL = 6;
+    public static final int MONSTER_SPLIT_MIN_LEVEL = 8;
     
     public static final char[] EXTRA_LETTERS = {'E', 'X', 'T', 'R', 'A'};
     public static final String[] EXTRA_VARS = {EXTRA_E, EXTRA_X, EXTRA_T, EXTRA_R, EXTRA_A};
@@ -41,8 +43,14 @@ public final class GameVars {
     public static final double AUTOFIRE_DROP_CHANCE = 0.01;
     public static final double MINIGAME_DROP_CHANCE = 0.01;
     public static final double TIME_PICKUP_DROP_CHANCE = 0.025;
-    public static final double EXTRA_TIME_MAX = 30.0;
-    public static final double EXTRA_TIME_REFILL = 12.0;
+    public static final double SHIELD_DROP_CHANCE = 0.02;
+    public static final double SHIELD_DURATION = 10.0;
+    public static final double SCOOP_DROP_CHANCE = 0.02;
+    public static final int SCOOP_COUNT = 2;
+    public static final int LEVEL_TIME_INITIAL = 30;
+    public static final int LEVEL_TIME_PICKUP = 1;
+    public static final int LEVEL_TIME_DEATH_PENALTY = 5;
+    public static final int LEVEL_TIME_MIN = 20;
     public static final double RANK_MARKER_DROP_CHANCE = 0.2;
     public static final int RANK_COLOR_COUNT = 6;
     public static final int RANK_UP_SCORE = 5000;

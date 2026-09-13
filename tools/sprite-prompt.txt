@@ -1,0 +1,17 @@
+Pixel-Art Sprite, 16-bit arcade shooter, Warblade/Galaga style.
+Crisp 1-bit outline, limited NES/SNES palette, no anti-aliasing, no blur.
+Centered subject, transparent or flat dark background.
+No watermark, no UI, no text unless asked.
+Game-ready, readable at small size, high contrast.
+
+# Usage
+# Put the subject first, then this block. Example:
+#
+# Red enemy fighter ship, nose pointing down, twin engines.
+# Pixel-Art Sprite, 16-bit arcade shooter, Warblade/Galaga style.
+# Crisp 1-bit outline, limited NES/SNES palette, no anti-aliasing, no blur.
+# Centered subject, transparent or flat dark background.
+# No watermark, no UI, no text unless asked.
+# Game-ready, readable at small size, high contrast.
+#
+# Aspect ratio for sprites: 1:1

@@ -71,6 +71,7 @@ public final class MusicHelper {
         if (player != null) {
             player.setVolume(clamped);
         }
+        JavaSoundMusic.setVolume(clamped);
     }
 
     public static void playOverride(String fileName) {
@@ -112,6 +113,7 @@ public final class MusicHelper {
     }
 
     public static void stop() {
+        JavaSoundMusic.stop();
         try {
             if (player != null) {
                 player.stop();
@@ -129,17 +131,36 @@ public final class MusicHelper {
     }
 
     public static boolean isPlaying() {
-        return playing;
+        return playing || JavaSoundMusic.isPlaying();
+    }
+
+    private static boolean preferJavaSound() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        return os.contains("linux");
     }
 
     private static void playUrl(String url, String trackId) {
         stop();
+        if (preferJavaSound() && JavaSoundMusic.looksSupported(url)) {
+            JavaSoundMusic.setVolume(OptionsStore.getMusicVolume());
+            JavaSoundMusic.playLoop(url);
+            currentTrackId = trackId;
+            playing = true;
+            return;
+        }
         try {
             Media media = new Media(url);
             MediaPlayer next = new MediaPlayer(media);
             next.setCycleCount(MediaPlayer.INDEFINITE);
             next.setVolume(OptionsStore.getMusicVolume());
             next.setOnError(() -> {
+                if (JavaSoundMusic.looksSupported(url)) {
+                    JavaSoundMusic.setVolume(OptionsStore.getMusicVolume());
+                    JavaSoundMusic.playLoop(url);
+                    currentTrackId = trackId;
+                    playing = true;
+                    return;
+                }
                 logMissing(url + " - " + String.valueOf(next.getError()));
                 if (trackId != null && trackId.startsWith("override:")) {
                     applyFromStore();
@@ -150,6 +171,13 @@ public final class MusicHelper {
             currentTrackId = trackId;
             playing = true;
         } catch (Exception e) {
+            if (JavaSoundMusic.looksSupported(url)) {
+                JavaSoundMusic.setVolume(OptionsStore.getMusicVolume());
+                JavaSoundMusic.playLoop(url);
+                currentTrackId = trackId;
+                playing = true;
+                return;
+            }
             logMissing(url + " - " + e.getMessage());
         }
     }

@@ -40,7 +40,7 @@ Output: `target/dist/`
 
 - macOS: `.dmg` (unsigned: after download use `Installieren.command` in the DMG, or `xattr -cr` on the DMG/app if Gatekeeper says “damaged”)
 - Windows: `.exe` (needs [WiX 3](https://wixtoolset.org/))
-- Linux: `.deb` (needs `fakeroot`)
+- Linux: `.deb` (needs `fakeroot`), Arch tarball, and `.AppImage`
 
 All three platforms are built by GitHub Actions (workflow **Package**, or a `v1.0.0` tag).
 
@@ -109,7 +109,7 @@ Ausgabe: `target/dist/`
 
 - macOS: `.dmg` (unsigniert: nach dem Download `Installieren.command` im DMG nutzen, oder bei „beschädigt“ `xattr -cr` auf DMG/App)
 - Windows: `.exe` (braucht [WiX 3](https://wixtoolset.org/))
-- Linux: `.deb` (braucht `fakeroot`)
+- Linux: `.deb` (braucht `fakeroot`), Arch-Tarball und `.AppImage`
 
 Alle drei Plattformen baut GitHub Actions (Workflow **Package** oder Tag `v1.0.0`).
 
